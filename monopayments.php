@@ -1,10 +1,10 @@
 <?php
 /*
-Plugin Name: Monopayments
-Description: Woocommerce Plugin of Monopayments
+Plugin Name: tapsilat
+Description: Woocommerce Plugin of tapsilat
 Version: 1.0
-Author: Monopayments
-Author URI: https://monopayments.com
+Author: tapsilat
+Author URI: https://tapsilat.com
 License: GNU
 */
 
@@ -12,16 +12,16 @@ add_action("plugins_loaded", "init", 0);
 add_filter("woocommerce_payment_gateways", "register");
 
 function register($gateways) {
-    $gateways[] = "monopayments";
+    $gateways[] = "tapsilat";
     return $gateways;
 }
 function init() {
     if (!class_exists("WC_Payment_Gateway")) {
         return;
     }
-    class monopayments extends WC_Payment_Gateway {
+    class tapsilat extends WC_Payment_Gateway {
         function __construct() {
-            $this->id = "monopayments";
+            $this->id = "tapsilat";
             $this->icon = null;
             $this->has_fields = true;
             $this->title = "Kredi kartı ile ödeme";
@@ -60,7 +60,7 @@ function init() {
             global $woocommerce;
             $order = wc_get_order($orderid);
             if ($order->get_status() == "pending") {
-                $settings = get_option("woocommerce_monopayments_settings");
+                $settings = get_option("woocommerce_tapsilat_settings");
                 if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $request = new Request();
                     $request->Token = $settings["Token"];

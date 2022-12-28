@@ -2,7 +2,7 @@
 if (!defined("ABSPATH")) {
     exit;
 }
-$settings = get_option("woocommerce_monopayments_settings");
+$settings = get_option("woocommerce_tapsilat_settings");
 ?>
 <?php if (isset($checkout) && !empty($checkout["error"])) { ?>
     <section>
