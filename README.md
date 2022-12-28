@@ -1,2 +1,2 @@
 # mono-woo
-Woocommerce Plugin of Mono
+Woocommerce Plugin of Monopayments
