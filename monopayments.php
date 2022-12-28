@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: Monopayments
-Description: Monopayments POS
+Description: Woocommerce Plugin of Monopayments
 Version: 1.0
 Author: Monopayments
 Author URI: https://monopayments.com
-License: MIT
+License: GNU
 */
 
 add_action("plugins_loaded", "init", 0);
