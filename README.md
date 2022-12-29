@@ -1,5 +1,5 @@
 # Tapsilat Woocommerce Plugin
-Woocommerce Plugin of tapsilat
+Woocommerce Plugin of Tapsilat
 
 ## Installation
 
