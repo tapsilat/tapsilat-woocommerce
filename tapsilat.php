@@ -1,9 +1,9 @@
 <?php
 /*
-Plugin Name: tapsilat
-Description: Woocommerce Plugin of tapsilat
+Plugin Name: Tapsilat
+Description: Woocommerce Plugin of Tapsilat
 Version: 1.0
-Author: tapsilat
+Author: Tapsilat
 Author URI: https://tapsilat.com
 License: GNU
 */
