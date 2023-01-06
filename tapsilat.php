@@ -64,47 +64,51 @@ function init() {
                 if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $request = new Request();
                     $request->Token = $settings["Token"];
-                    $request->OrderId = $order->order_key;
-                    $request->Amount = $order->order_total;
-                    $request->Currency = "TRY";
-                    $request->CardHolder = $_POST["cardholder"];
-                    $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
-                    $request->CardMonth = $_POST["cardmonth"];
-                    $request->CardYear =  "20" . $_POST["cardyear"];
-                    $request->CardCode = $_POST["cardcode"];
-                    if ($settings["3d"] == "yes") {
-                        $request->ThreeDPay = true;
-                        $request->Callback = $order->get_checkout_payment_url(true);
+                    if (isset($_GET["callback"])) {
+
                     } else {
-                        $request->ThreeDPay = false;
-                    }
-                    $request->Installment = [1];
-                    $response = $request->order_create($request);
-                    if (isset($response["reference_id"])) {
-                        $request->Reference = $response["reference_id"];
+                        $request->OrderId = $order->order_key;
+                        $request->Amount = $order->order_total;
+                        $request->Currency = "TRY";
+                        $request->CardHolder = $_POST["cardholder"];
+                        $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
+                        $request->CardMonth = $_POST["cardmonth"];
+                        $request->CardYear =  "20" . $_POST["cardyear"];
+                        $request->CardCode = $_POST["cardcode"];
                         if ($settings["3d"] == "yes") {
-                            $checkout = $request->checkout($request);
-                            if (isset($checkout["form"]) && !empty($checkout["form"])) {
-                                $dom = new DomDocument();
-                                $dom->loadHTML(base64_decode($checkout["form"]));
-                                $form = $dom->getElementsByTagName("form")->item(0);
-                                print($dom->savehtml($form));
-                                print("<script>document.payment.submit();</script>");
-                                exit;
+                            $request->ThreeDPay = true;
+                            $request->Callback = $order->get_checkout_payment_url(true) . "&callback=1";
+                        } else {
+                            $request->ThreeDPay = false;
+                        }
+                        $request->Installment = [1];
+                        $response = $request->order_create($request);
+                        if (isset($response["reference_id"])) {
+                            $request->Reference = $response["reference_id"];
+                            if ($settings["3d"] == "yes") {
+                                $checkout = $request->checkout($request);
+                                if (isset($checkout["form"]) && !empty($checkout["form"])) {
+                                    $dom = new DomDocument();
+                                    $dom->loadHTML(base64_decode($checkout["form"]));
+                                    $form = $dom->getElementsByTagName("form")->item(0);
+                                    print($dom->savehtml($form));
+                                    print("<script>document.payment.submit();</script>");
+                                    exit;
+                                }
+                            } else {
+                                $checkout = $request->checkout($request);
+                                if (isset($checkout["paid"]) && $checkout["paid"] == true) {
+                                    $order->update_status("processing");
+                                    $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["reference_id"] . "");
+                                    $order->payment_complete();
+                                    $woocommerce->cart->empty_cart();
+                                    wp_redirect($this->get_return_url());
+                                    exit;
+                                }
                             }
                         } else {
-                            $checkout = $request->checkout($request);
-                            if (isset($checkout["paid"]) && $checkout["paid"] == true) {
-                                $order->update_status("processing");
-                                $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["reference_id"] . "");
-                                $order->payment_complete();
-                                $woocommerce->cart->empty_cart();
-                                wp_redirect($this->get_return_url());
-                                exit;
-                            }
+                            $checkout = array("error" => $response);
                         }
-                    } else {
-                        $checkout = array("error" => $response);
                     }
                 }
                 include plugin_dir_path(__FILE__) . "form.php";
