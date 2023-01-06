@@ -111,7 +111,7 @@ function init() {
                             }
                         } else {
                             if (isset($response["error"])) {
-                                $checkout = array("error" => $response["error"]);
+                                $checkout = $response;
                             } else {
                                 $checkout = array("error" => $response);
                             }
