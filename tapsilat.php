@@ -79,7 +79,7 @@ function init() {
                         $request->ThreeDPay = false;
                     }
                     $request->Installment = [1];
-                    $response = $request->order($request);
+                    $response = $request->order_create($request);
                     if (isset($response["reference_id"])) {
                         $request->Reference = $response["reference_id"];
                         if ($settings["3d"] == "yes") {
@@ -125,7 +125,7 @@ function init() {
         public $CardYear;
         public $CardCode;
         public $ThreeDPay;
-        public static function order(Request $request) {
+        public static function order_create(Request $request) {
             $body = array();
             $body["amount"] = floatval($request->Amount);
             $body["currency"] = $request->Currency;
@@ -144,6 +144,20 @@ function init() {
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            $output = curl_exec($ch);
+            curl_close($ch);
+            return json_decode($output, true);
+        }
+        public static function order_details(Request $request) {
+            $headers = array();
+            $headers[] = "Content-Type: application/json; charset=utf-8";
+            $headers[] = "Authorization: Bearer " . $request->Token;
+            $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/" . $request->Reference . "/payment_details");
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+            curl_setopt($ch, CURLOPT_POST, 0);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
             $output = curl_exec($ch);
