@@ -64,10 +64,13 @@ function init() {
                 if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $request = new Request();
                     $request->Token = $settings["Token"];
+                    $request->OrderId = $order->order_key;
                     if (isset($_GET["callback"])) {
-
+                        $response = $request->order_details($request);
+                        if (isset($response["order_payment_status"])) {
+                            print_r($response);
+                        }
                     } else {
-                        $request->OrderId = $order->order_key;
                         $request->Amount = $order->order_total;
                         $request->Currency = "TRY";
                         $request->CardHolder = $_POST["cardholder"];
