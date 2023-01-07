@@ -61,70 +61,71 @@ function init() {
             $order = wc_get_order($orderid);
             if ($order->get_status() == "pending") {
                 $settings = get_option("woocommerce_tapsilat_settings");
-                if ($_SERVER["REQUEST_METHOD"] == "POST") {
+                if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["callback"])) {
                     $request = new Request();
                     $request->Token = $settings["Token"];
                     $request->OrderId = $order->order_key;
-                    if (isset($_GET["callback"])) {
-                        $response = $request->order_details($request);
-                        if (isset($response["order_payment_status"])) {
-                            $paymentstatus = $response["order_payment_status"];
-                            if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
+                    $response = $request->order_details($request);
+                    if (isset($response["order_payment_status"])) {
+                        $paymentstatus = $response["order_payment_status"];
+                        if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
+                            $order->update_status("processing");
+                            $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["order"]["reference_id"] . "");
+                            $order->payment_complete();
+                            $woocommerce->cart->empty_cart();
+                            wp_redirect($this->get_return_url());
+                            exit;
+                        } else {
+                            $checkout = array("error" => $paymentstatus["message"]);
+                        }
+                    }
+                } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
+                    $request = new Request();
+                    $request->Token = $settings["Token"];
+                    $request->OrderId = $order->order_key;
+                    $request->Amount = $order->order_total;
+                    $request->Currency = "TRY";
+                    $request->CardHolder = $_POST["cardholder"];
+                    $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
+                    $request->CardMonth = $_POST["cardmonth"];
+                    $request->CardYear =  "20" . $_POST["cardyear"];
+                    $request->CardCode = $_POST["cardcode"];
+                    if ($settings["3d"] == "yes") {
+                        $request->ThreeDPay = true;
+                        $request->Callback = $order->get_checkout_payment_url(true) . "&callback=1";
+                    } else {
+                        $request->ThreeDPay = false;
+                    }
+                    $request->Installment = [1];
+                    $response = $request->order($request);
+                    if (isset($response["reference_id"])) {
+                        $request->Reference = $response["reference_id"];
+                        if ($settings["3d"] == "yes") {
+                            $checkout = $request->checkout($request);
+                            if (isset($checkout["form"]) && !empty($checkout["form"])) {
+                                $dom = new DomDocument();
+                                $dom->loadHTML(base64_decode($checkout["form"]));
+                                $form = $dom->getElementsByTagName("form")->item(0);
+                                print($dom->savehtml($form));
+                                print("<script>document.payment.submit();</script>");
+                                exit;
+                            }
+                        } else {
+                            $checkout = $request->checkout($request);
+                            if (isset($checkout["paid"]) && $checkout["paid"] == true) {
                                 $order->update_status("processing");
-                                $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["order"]["reference_id"] . "");
+                                $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["reference_id"] . "");
                                 $order->payment_complete();
                                 $woocommerce->cart->empty_cart();
                                 wp_redirect($this->get_return_url());
                                 exit;
-                            } else {
-                                $checkout = array("error" => $paymentstatus["message"]);
                             }
                         }
                     } else {
-                        $request->Amount = $order->order_total;
-                        $request->Currency = "TRY";
-                        $request->CardHolder = $_POST["cardholder"];
-                        $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
-                        $request->CardMonth = $_POST["cardmonth"];
-                        $request->CardYear =  "20" . $_POST["cardyear"];
-                        $request->CardCode = $_POST["cardcode"];
-                        if ($settings["3d"] == "yes") {
-                            $request->ThreeDPay = true;
-                            $request->Callback = $order->get_checkout_payment_url(true) . "&callback=1";
+                        if (isset($response["error"])) {
+                            $checkout = $response;
                         } else {
-                            $request->ThreeDPay = false;
-                        }
-                        $request->Installment = [1];
-                        $response = $request->order($request);
-                        if (isset($response["reference_id"])) {
-                            $request->Reference = $response["reference_id"];
-                            if ($settings["3d"] == "yes") {
-                                $checkout = $request->checkout($request);
-                                if (isset($checkout["form"]) && !empty($checkout["form"])) {
-                                    $dom = new DomDocument();
-                                    $dom->loadHTML(base64_decode($checkout["form"]));
-                                    $form = $dom->getElementsByTagName("form")->item(0);
-                                    print($dom->savehtml($form));
-                                    print("<script>document.payment.submit();</script>");
-                                    exit;
-                                }
-                            } else {
-                                $checkout = $request->checkout($request);
-                                if (isset($checkout["paid"]) && $checkout["paid"] == true) {
-                                    $order->update_status("processing");
-                                    $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["reference_id"] . "");
-                                    $order->payment_complete();
-                                    $woocommerce->cart->empty_cart();
-                                    wp_redirect($this->get_return_url());
-                                    exit;
-                                }
-                            }
-                        } else {
-                            if (isset($response["error"])) {
-                                $checkout = $response;
-                            } else {
-                                $checkout = array("error" => $response);
-                            }
+                            $checkout = array("error" => $response);
                         }
                     }
                 }
