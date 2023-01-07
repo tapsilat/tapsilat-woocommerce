@@ -75,8 +75,10 @@ function init() {
                             $woocommerce->cart->empty_cart();
                             wp_redirect($this->get_return_url());
                             exit;
-                        } else {
+                        } elseif (isset($paymentstatus["message"])) {
                             $checkout = array("error" => $paymentstatus["message"]);
+                        }else{
+                            $checkout = array("error" => "Ödeme işlemi başarısız.");
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
