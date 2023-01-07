@@ -64,7 +64,7 @@ function init() {
                 if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["callback"])) {
                     $request = new Request();
                     $request->Token = $settings["Token"];
-                    $request->OrderId = $order->order_key;
+                    $request->OrderId = $order->order_key . "-" . $_GET["callback"];
                     $response = $request->order_details($request);
                     if (isset($response["order_payment_status"])) {
                         $paymentstatus = $response["order_payment_status"];
@@ -77,14 +77,15 @@ function init() {
                             exit;
                         } elseif (isset($paymentstatus["message"])) {
                             $checkout = array("error" => $paymentstatus["message"]);
-                        }else{
+                        } else {
                             $checkout = array("error" => "Ödeme işlemi başarısız.");
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
+                    $callback = floor(microtime(true) * 1000);
                     $request = new Request();
                     $request->Token = $settings["Token"];
-                    $request->OrderId = $order->order_key;
+                    $request->OrderId = $order->order_key . "-" . $callback;
                     $request->Amount = $order->order_total;
                     $request->Currency = "TRY";
                     $request->CardHolder = $_POST["cardholder"];
@@ -94,7 +95,7 @@ function init() {
                     $request->CardCode = $_POST["cardcode"];
                     if ($settings["3d"] == "yes") {
                         $request->ThreeDPay = true;
-                        $request->Callback = $order->get_checkout_payment_url(true) . "&callback=1";
+                        $request->Callback = $order->get_checkout_payment_url(true) . "&callback=" . $callback;
                     } else {
                         $request->ThreeDPay = false;
                     }
