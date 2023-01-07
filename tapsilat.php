@@ -61,10 +61,10 @@ function init() {
             $order = wc_get_order($orderid);
             if ($order->get_status() == "pending") {
                 $settings = get_option("woocommerce_tapsilat_settings");
-                if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["callback"])) {
+                if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["rnd"])) {
                     $request = new Request();
                     $request->Token = $settings["Token"];
-                    $request->OrderId = $order->order_key . "-" . $_GET["callback"];
+                    $request->OrderId = $order->order_key . "-" . $_GET["rnd"];
                     $response = $request->order_details($request);
                     if (isset($response["order_payment_status"])) {
                         $paymentstatus = $response["order_payment_status"];
@@ -82,10 +82,10 @@ function init() {
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
-                    $callback = floor(microtime(true) * 1000);
+                    $rnd = floor(microtime(true) * 1000);
                     $request = new Request();
                     $request->Token = $settings["Token"];
-                    $request->OrderId = $order->order_key . "-" . $callback;
+                    $request->OrderId = $order->order_key . "-" . $rnd;
                     $request->Amount = $order->order_total;
                     $request->Currency = "TRY";
                     $request->CardHolder = $_POST["cardholder"];
@@ -95,7 +95,7 @@ function init() {
                     $request->CardCode = $_POST["cardcode"];
                     if ($settings["3d"] == "yes") {
                         $request->ThreeDPay = true;
-                        $request->Callback = $order->get_checkout_payment_url(true) . "&callback=" . $callback;
+                        $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
                     } else {
                         $request->ThreeDPay = false;
                     }
