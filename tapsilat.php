@@ -68,7 +68,17 @@ function init() {
                     if (isset($_GET["callback"])) {
                         $response = $request->order_details($request);
                         if (isset($response["order_payment_status"])) {
-                            print_r($response);
+                            $paymentstatus = $response["order_payment_status"];
+                            if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
+                                $order->update_status("processing");
+                                $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["order"]["reference_id"] . "");
+                                $order->payment_complete();
+                                $woocommerce->cart->empty_cart();
+                                wp_redirect($this->get_return_url());
+                                exit;
+                            } else {
+                                $checkout = array("error" => $paymentstatus["message"]);
+                            }
                         }
                     } else {
                         $request->Amount = $order->order_total;
