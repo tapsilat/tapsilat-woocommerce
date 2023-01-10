@@ -155,7 +155,7 @@ function init() {
             $body["amount"] = floatval($request->Amount);
             $body["currency"] = $request->Currency;
             $body["enabled_installments"] = $request->Installment;
-            $body["conservation_id"] = $request->OrderId;
+            $body["conversation_id"] = $request->OrderId;
             $body["locale"] = substr(get_locale(), 0, 2);
             if ($request->ThreeDPay == true) {
                 $body["payment_success_url"] = $request->Callback;
@@ -177,7 +177,7 @@ function init() {
         }
         public static function order_details(Request $request) {
             $body = array();
-            $body["conservation_id"] = $request->OrderId;
+            $body["conversation_id"] = $request->OrderId;
             $headers = array();
             $headers[] = "Content-Type: application/json; charset=utf-8";
             $headers[] = "Authorization: Bearer " . $request->Token;
