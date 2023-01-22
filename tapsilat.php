@@ -24,9 +24,9 @@ function init() {
             $this->id = "tapsilat";
             $this->icon = null;
             $this->has_fields = true;
-            $this->title = "Kredi kartı ile ödeme";
-            $this->method_title = "Kredi kartı ile ödeme";
-            $this->method_description = "Ödemeleri kredi kartı/banka kartı kullanarak alın.";
+            $this->title = "Pay with Tapsilat (Credit Card/Debit Card or alternative payment methods)";
+            $this->method_title = "Pay with Tapsilat";
+            $this->method_description = "Pay with Tapsilat (Credit Card/Debit Card or alternative payment methods)";
             $this->init_form_fields();
             $this->init_settings();
             add_action("woocommerce_receipt_" . $this->id, array($this, "receipt"));
@@ -38,13 +38,13 @@ function init() {
                 "Token" => array(
                     "title" => "Token",
                     "type" => "text",
-                    "desc_tip" => "Token bilgisi"
+                    "desc_tip" => "Get this from Tapsilat",
                 ),
                 "3d" => array(
-                    "title" => "3D secure aktif",
-                    "label" => "3D secure aktif<br>",
+                    "title" => "3D Secure active",
+                    "label" => "3D Secure active<br>",
                     "type" => "checkbox",
-                    "desc_tip" => "3D secure ile ödemeye izin verecek misiniz?",
+                    "desc_tip" => "Use 3D Secure",
                     "default" => "yes"
                 )
             );
@@ -70,7 +70,7 @@ function init() {
                         $paymentstatus = $response["order_payment_status"];
                         if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
                             $order->update_status("processing");
-                            $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["order"]["reference_id"] . "");
+                            $order->add_order_note("Process is comleted, Order ID: " . $response["order"]["reference_id"] . "");
                             $order->payment_complete();
                             $woocommerce->cart->empty_cart();
                             wp_redirect($this->get_return_url());
@@ -78,7 +78,7 @@ function init() {
                         } elseif (isset($paymentstatus["message"])) {
                             $checkout = array("error" => $paymentstatus["message"]);
                         } else {
-                            $checkout = array("error" => "Ödeme işlemi başarısız.");
+                            $checkout = array("error" => "Payment is not completed. Please try again.");
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -117,7 +117,7 @@ function init() {
                             $checkout = $request->checkout($request);
                             if (isset($checkout["paid"]) && $checkout["paid"] == true) {
                                 $order->update_status("processing");
-                                $order->add_order_note("Ödeme tamamlandı. Sipariş numarası: " . $response["reference_id"] . "");
+                                $order->add_order_note("Process is comleted, Order ID: " . $response["reference_id"] . "");
                                 $order->payment_complete();
                                 $woocommerce->cart->empty_cart();
                                 wp_redirect($this->get_return_url());
