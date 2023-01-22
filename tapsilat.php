@@ -98,7 +98,7 @@ function init() {
                     $request->Token = $settings["Token"];
                     $request->OrderId = $order->order_key . "-" . $rnd;
                     $request->Amount = $order->order_total;
-                    $request->Currency = "TRY";
+                    $request->Currency = $settings["Currency"];
                     $request->CardHolder = $_POST["cardholder"];
                     $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
                     $request->CardMonth = $_POST["cardmonth"];
