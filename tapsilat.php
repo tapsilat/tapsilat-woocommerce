@@ -46,6 +46,17 @@ function init() {
                     "type" => "checkbox",
                     "desc_tip" => "Use 3D Secure",
                     "default" => "yes"
+                ),
+                "Currency" => array(
+                    "title" => "Currency",
+                    "type" => "select",
+                    "desc_tip" => "Select Currency",
+                    "default" => "TRY",
+                    "options" => array(
+                        "TRY" => "₺ (TRY)",
+                        "USD" => "$ (USD)",
+                        "EUR" => "€ (EUR)",
+                    )
                 )
             );
         }
