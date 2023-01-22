@@ -24,9 +24,9 @@ function init() {
             $this->id = "tapsilat";
             $this->icon = null;
             $this->has_fields = true;
-            $this->title = "Pay with Tapsilat (Credit Card/Debit Card or alternative payment methods)";
-            $this->method_title = "Pay with Tapsilat";
-            $this->method_description = "Pay with Tapsilat (Credit Card/Debit Card or alternative payment methods)";
+            $this->title = "Credit Card/Debit Card or alternative payment methods";
+            $this->method_title = "Pay with Card/Debit Card or alternative payment methods";
+            $this->method_description = "Credit Card/Debit Card or alternative payment methods)";
             $this->init_form_fields();
             $this->init_settings();
             add_action("woocommerce_receipt_" . $this->id, array($this, "receipt"));
