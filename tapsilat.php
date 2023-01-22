@@ -227,4 +227,136 @@ function init() {
             return json_decode($output, true);
         }
     }
+
+    class TapsilatOrder{
+        public $locale;
+        public $currency;
+        public $buyer;
+        public $shipping_address;
+        public $billing_address;
+        public $basket_items;
+        public $enabled_installments;
+        public $amount;
+        public $conservation_id;
+        public $payment_failure_url;
+        public $payment_success_url;
+        public function __construct($locale, $currency, $buyer, $shipping_address, $billing_address, $basket_items, $enabled_installments, $amount, $conservation_id, $payment_failure_url, $payment_success_url) {
+            $this->locale = $locale;
+            $this->currency = $currency;
+            $this->buyer = $buyer;
+            $this->shipping_address = $shipping_address;
+            $this->billing_address = $billing_address;
+            $this->basket_items = $basket_items;
+            $this->enabled_installments = $enabled_installments;
+            $this->amount = $amount;
+            $this->conservation_id = $conservation_id;
+            $this->payment_failure_url = $payment_failure_url;
+            $this->payment_success_url = $payment_success_url;
+        }
+
+        public function getArray() {
+            return array(
+                "locale" => $this->locale,
+                "currency" => $this->currency,
+                "buyer" => $this->buyer,
+                "shipping_address" => $this->shipping_address,
+                "billing_address" => $this->billing_address,
+                "basket_items" => $this->basket_items,
+                "enabled_installments" => $this->enabled_installments,
+                "amount" => $this->amount,
+                "conservation_id" => $this->conservation_id,
+                "payment_failure_url" => $this->payment_failure_url,
+                "payment_success_url" => $this->payment_success_url
+            );
+        }
+
+        public function setBuyer($id, $name, $surname, $email, $identity_number, $gsm_number, $registration_date, $last_login_date, $registration_address, $city, $country, $zip_code, $ip) {
+            $this->buyer = array(
+                "id" => $id,
+                "name" => $name,
+                "surname" => $surname,
+                "email" => $email,
+                "identity_number" => $identity_number,
+                "gsm_number" => $gsm_number,
+                "registration_date" => $registration_date,
+                "last_login_date" => $last_login_date,
+                "registration_address" => $registration_address,
+                "city" => $city,
+                "country" => $country,
+                "zip_code" => $zip_code,
+                "ip" => $ip
+            );
+        }
+
+        public function setShippingAddress($address, $zip_code, $contact_name, $city, $country, $tracking_code) {
+            $this->shipping_address = array(
+                "address" => $address,
+                "zip_code" => $zip_code,
+                "contact_name" => $contact_name,
+                "city" => $city,
+                "country" => $country,
+                "tracking_code" => $tracking_code
+            );
+        }
+
+   
+        public function setBillingAddress($address, $zip_code, $contact_name, $city, $country) {
+            $this->billing_address = array(
+                "address" => $address,
+                "zip_code" => $zip_code,
+                "contact_name" => $contact_name,
+                "city" => $city,
+                "country" => $country
+            );
+        }
+
+     
+        public function addBasketItems($id, $price, $name, $category1, $category2, $item_type) {
+            $this->basket_items[] = array(
+                "id" => $id,
+                "price" => $price,
+                "name" => $name,
+                "category1" => $category1,
+                "category2" => $category2,
+                "item_type" => $item_type
+            );
+        }
+
+        public function emptyBasketItems() {
+            $this->basket_items = array();
+        }
+
+        public function setLocale($locale) {
+            $this->locale = $locale;
+        }
+
+        public function setCurrency($currency) {
+            $this->currency = $currency;
+        }
+
+        public function setEnabledInstallments($enabled_installments) {
+            $this->enabled_installments = $enabled_installments;
+        }
+
+        public function setAmount($amount) {
+            $this->amount = $amount;
+        }
+
+
+        public function setConservationId($conservation_id) {
+            $this->conservation_id = $conservation_id;
+        }
+
+
+        public function setPaymentFailureUrl($payment_failure_url) {
+            $this->payment_failure_url = $payment_failure_url;
+        }
+
+        public function setPaymentSuccessUrl($payment_success_url) {
+            $this->payment_success_url = $payment_success_url;
+        }
+
+
+
+    }
 }
