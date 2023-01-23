@@ -78,7 +78,7 @@ function init() {
                     $request->Token = $settings["Token"];
                     $request->Conversation = $order->order_key . "-" . $rnd;
                     $request->Locale = substr(get_locale(), 0, 2);
-                    $response = $request->details($request);
+                    $response = $request->details();
                     if (isset($response["order_payment_status"])) {
                         $paymentstatus = $response["order_payment_status"];
                         if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
@@ -144,7 +144,7 @@ function init() {
                         $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
                     }
                     $request->Locale = substr(get_locale(), 0, 2);
-                    $response = $request->create($request);
+                    $response = $request->create();
                     if (isset($response["reference_id"])) {
                         $request = new Checkout();
                         $request->Token = $settings["Token"];
@@ -159,7 +159,7 @@ function init() {
                         } else {
                             $request->ThreeDPay = false;
                         }
-                        $checkout = $request->transaction($request);
+                        $checkout = $request->transaction();
                         if ($settings["3d"] == "yes") {
                             if (isset($checkout["form"]) && !empty($checkout["form"])) {
                                 $dom = new DomDocument();
