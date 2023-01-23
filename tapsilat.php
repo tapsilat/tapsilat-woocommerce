@@ -120,14 +120,14 @@ function init() {
                         "contact_name" => $data["billing"]["company"],
                         "address" => trim($data["billing"]["address_1"] . " " . $data["billing"]["address_2"]),
                         "country" => $data["billing"]["country"],
-                        "city" => $data["billing"]["city"],
+                        "city" => trim($data["billing"]["state"] . " " . $data["billing"]["city"]),
                         "zip_code" => $data["billing"]["postcode"]
                     );
                     $request->Shipping = array(
                         "contact_name" => $data["shipping"]["company"],
                         "address" => trim($data["shipping"]["address_1"] . " " . $data["shipping"]["address_2"]),
                         "country" => $data["shipping"]["country"],
-                        "city" => $data["shipping"]["city"],
+                        "city" => trim($data["shipping"]["state"] . " " . $data["shipping"]["city"]),
                         "zip_code" => $data["shipping"]["postcode"]
                     );
                     $basket = array();
