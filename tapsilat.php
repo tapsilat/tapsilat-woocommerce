@@ -117,7 +117,7 @@ function init() {
                         "country" => $data["billing"]["country"],
                         "city" => $data["billing"]["city"],
                         "zip_code" => $data["billing"]["postcode"],
-                        "ip" => ""
+                        "ip" => $data["customer_ip_address"]
                     );
                     $request->Billing = array(
                         "contact_name" => $data["billing"]["company"],
@@ -149,7 +149,7 @@ function init() {
                         $request->Token = $settings["Token"];
                         $request->Reference = $response["reference_id"];
                         $request->CardHolder = $_POST["cardholder"];
-                        $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
+                        $request->CardNumber = $_POST["cardnumber"];
                         $request->CardMonth = $_POST["cardmonth"];
                         $request->CardYear =  "20" . $_POST["cardyear"];
                         $request->CardCode = $_POST["cardcode"];
