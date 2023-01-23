@@ -114,9 +114,6 @@ function init() {
                         "surname" => $data["billing"]["last_name"],
                         "email" => $data["billing"]["email"],
                         "gsm_number" => $data["billing"]["phone"],
-                        "country" => $data["billing"]["country"],
-                        "city" => $data["billing"]["city"],
-                        "zip_code" => $data["billing"]["postcode"],
                         "ip" => $data["customer_ip_address"]
                     );
                     $request->Billing = array(
@@ -133,12 +130,17 @@ function init() {
                         "city" => $data["shipping"]["city"],
                         "zip_code" => $data["shipping"]["postcode"]
                     );
-                    $request->Basket = array(
-                        array(
-                            "name" => "",
-                            "price" => ""
-                        )
-                    );
+                    $basket = array();
+                    foreach ($order->get_items() as $item_id => $item) {
+                        $product = $item->get_product();
+                        $basket[] = array(
+                            "id" => $product->get_id(),
+                            "name" => $product->get_name(),
+                            "price" => $product->get_price(),
+                            "quantity" => $item->get_quantity()
+                        );
+                    }
+                    $request->Basket = $basket;
                     if ($settings["3d"] == "yes") {
                         $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
                     }
