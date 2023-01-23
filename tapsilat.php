@@ -103,6 +103,7 @@ function init() {
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $data = $order->get_data();
                     $rnd = floor(microtime(true) * 1000);
+                    $countries = new WC_Countries();
                     $request = new Order();
                     $request->Token = $settings["Token"];
                     $request->Conversation = $order->order_key . "-" . $rnd;
@@ -116,20 +117,18 @@ function init() {
                         "gsm_number" => $data["billing"]["phone"],
                         "ip" => $data["customer_ip_address"]
                     );
-                    $wc_countries = new WC_Countries;
-                    $countries = $wc_countries->get_countries();
                     $request->Billing = array(
                         "contact_name" => $data["billing"]["company"],
                         "address" => trim($data["billing"]["address_1"] . " " . $data["billing"]["address_2"]  . " " . $data["billing"]["city"]),
-                        "country" => $countries[$data["billing"]["country"]],
-                        "city" => $wc_countries->get_states($data["billing"]["country"])[$data["billing"]["state"]],
+                        "country" => $countries->get_countries()[$data["billing"]["country"]],
+                        "city" => $countries->get_states($data["billing"]["country"])[$data["billing"]["state"]],
                         "zip_code" => $data["billing"]["postcode"]
                     );
                     $request->Shipping = array(
                         "contact_name" => $data["shipping"]["company"],
                         "address" => trim($data["shipping"]["address_1"] . " " . $data["shipping"]["address_2"]  . " " . $data["shipping"]["city"]),
-                        "country" => $countries[$data["shipping"]["country"]],
-                        "city" => $wc_countries->get_states($data["shipping"]["country"])[$data["shipping"]["state"]],
+                        "country" => $countries->get_countries()[$data["shipping"]["country"]],
+                        "city" => $countries->get_states($data["shipping"]["country"])[$data["shipping"]["state"]],
                         "zip_code" => $data["shipping"]["postcode"]
                     );
                     $basket = array();
