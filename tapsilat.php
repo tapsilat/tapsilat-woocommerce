@@ -76,7 +76,7 @@ function init() {
                     $rnd = $_GET["rnd"];
                     $request = new Order();
                     $request->Token = $settings["Token"];
-                    $request->ConversationId = $order->order_key . "-" . $rnd;
+                    $request->Conversation = $order->order_key . "-" . $rnd;
                     $request->Locale = substr(get_locale(), 0, 2);
                     $response = $request->details($request);
                     if (isset($response["order_payment_status"])) {
@@ -104,7 +104,7 @@ function init() {
                     $rnd = floor(microtime(true) * 1000);
                     $request = new Order();
                     $request->Token = $settings["Token"];
-                    $request->ConversationId = $order->order_key . "-" . $rnd;
+                    $request->Conversation = $order->order_key . "-" . $rnd;
                     $request->Amount = $order->order_total;
                     $request->Currency = $settings["Currency"];
                     $request->Installment = [1];
@@ -148,7 +148,7 @@ function init() {
                     if (isset($response["reference_id"])) {
                         $request = new Checkout();
                         $request->Token = $settings["Token"];
-                        $request->ReferenceId = $response["reference_id"];
+                        $request->Reference = $response["reference_id"];
                         $request->CardHolder = $_POST["cardholder"];
                         $request->CardNumber = str_replace(" ", "", $_POST["cardnumber"]);
                         $request->CardMonth = $_POST["cardmonth"];
@@ -193,7 +193,7 @@ function init() {
     }
     class Checkout {
         public $Token;
-        public $ReferenceId;
+        public $Reference;
         public $CardHolder;
         public $CardNumber;
         public $CardMonth;
@@ -202,7 +202,7 @@ function init() {
         public $ThreeDPay;
         public function transaction() {
             $body = array();
-            $body["reference_id"] = $this->ReferenceId;
+            $body["reference_id"] = $this->Reference;
             $body["holder_name"] = $this->CardHolder;
             $body["card_number"] = $this->CardNumber;
             $body["expiry_month"] = $this->CardMonth;
@@ -223,7 +223,7 @@ function init() {
     }
     class Order {
         public $Token;
-        public $ConversationId;
+        public $Conversation;
         public $Amount;
         public $Currency;
         public $Installment;
@@ -235,7 +235,7 @@ function init() {
         public $Locale;
         public function create() {
             $body = array();
-            $body["conversation_id"] = $this->ConversationId;
+            $body["conversation_id"] = $this->Conversation;
             $body["amount"] = floatval($this->Amount);
             $body["currency"] = $this->Currency;
             $body["enabled_installments"] = $this->Installment;
@@ -259,7 +259,7 @@ function init() {
         }
         public function details() {
             $body = array();
-            $body["conversation_id"] = $this->ConversationId;
+            $body["conversation_id"] = $this->Conversation;
             $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/payment-details");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
