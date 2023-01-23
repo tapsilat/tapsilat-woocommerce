@@ -136,8 +136,7 @@ function init() {
                         $product = $item->get_product();
                         $basket[] = array(
                             "name" => $product->get_name(),
-                            "price" => floatval($product->get_price()),
-                            "quantity" => intval($item->get_quantity())
+                            "price" => floatval($product->get_price())
                         );
                     }
                     $request->Basket = $basket;
