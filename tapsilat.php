@@ -135,8 +135,10 @@ function init() {
                         "zip_code" => ""
                     );
                     $request->Basket = array(
-                        "name" => "",
-                        "price" => ""
+                        array(
+                            "name" => "",
+                            "price" => ""
+                        )
                     );
                     if ($settings["3d"] == "yes") {
                         $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
@@ -240,6 +242,10 @@ function init() {
             $body["amount"] = floatval($this->Amount);
             $body["currency"] = $this->Currency;
             $body["enabled_installments"] = $this->Installment;
+            $body["buyer"] = $this->Buyer;
+            $body["billing_address"] = $this->Billing;
+            $body["shipping_address"] = $this->Shipping;
+            $body["basket_items"] = $this->Basket;
             $body["payment_success_url"] = $this->Callback;
             $body["payment_failure_url"] = $this->Callback;
             $body["locale"] = $this->Locale;
