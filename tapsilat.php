@@ -193,21 +193,21 @@ function init() {
     }
     class Checkout {
         public $Token;
+        public $ReferenceId;
         public $CardHolder;
         public $CardNumber;
         public $CardMonth;
         public $CardYear;
         public $CardCode;
         public $ThreeDPay;
-        public $ReferenceId;
         public function transaction() {
             $body = array();
+            $body["reference_id"] = $this->ReferenceId;
             $body["holder_name"] = $this->CardHolder;
             $body["card_number"] = $this->CardNumber;
             $body["expiry_month"] = $this->CardMonth;
             $body["expiry_year"] = $this->CardYear;
             $body["cvv"] = $this->CardCode;
-            $body["reference_id"] = $this->ReferenceId;
             $body["three_d_pay"] = $this->ThreeDPay;
             $headers = array();
             $headers[] = "Content-Type: application/json; charset=utf-8";
@@ -231,8 +231,8 @@ function init() {
         public $Currency;
         public $Installment;
         public $Buyer;
-        public $Shipping;
         public $Billing;
+        public $Shipping;
         public $Basket;
         public $Callback;
         public $Locale;
