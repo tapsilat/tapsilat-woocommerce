@@ -108,6 +108,36 @@ function init() {
                     $request->Amount = $order->order_total;
                     $request->Currency = $settings["Currency"];
                     $request->Installment = [1];
+                    $request->Buyer = array(
+                        "name" => "",
+                        "surname" => "",
+                        "email" => "",
+                        "gsm_number" => "",
+                        "city" => "",
+                        "country" => "",
+                        "zip_code" => "",
+                        "registration_date" => "",
+                        "last_login_date" => "",
+                        "ip" => ""
+                    );
+                    $request->Billing = array(
+                        "contact_name" => "",
+                        "address" => "",
+                        "city" => "",
+                        "country" => "",
+                        "zip_code" => ""
+                    );
+                    $request->Shipping = array(
+                        "contact_name" => "",
+                        "address" => "",
+                        "city" => "",
+                        "country" => "",
+                        "zip_code" => ""
+                    );
+                    $request->Basket = array(
+                        "name" => "",
+                        "price" => ""
+                    );
                     if ($settings["3d"] == "yes") {
                         $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
                     }
