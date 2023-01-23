@@ -101,6 +101,7 @@ function init() {
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
+                    $data = $order->get_data();
                     $rnd = floor(microtime(true) * 1000);
                     $request = new Order();
                     $request->Token = $settings["Token"];
@@ -109,30 +110,28 @@ function init() {
                     $request->Currency = $settings["Currency"];
                     $request->Installment = [1];
                     $request->Buyer = array(
-                        "name" => "",
-                        "surname" => "",
-                        "email" => "",
-                        "gsm_number" => "",
-                        "city" => "",
-                        "country" => "",
-                        "zip_code" => "",
-                        "registration_date" => "",
-                        "last_login_date" => "",
+                        "name" => $data["billing"]["first_name"],
+                        "surname" => $data["billing"]["last_name"],
+                        "email" => $data["billing"]["email"],
+                        "gsm_number" => $data["billing"]["phone"],
+                        "country" => $data["billing"]["country"],
+                        "city" => $data["billing"]["city"],
+                        "zip_code" => $data["billing"]["postcode"],
                         "ip" => ""
                     );
                     $request->Billing = array(
-                        "contact_name" => "",
-                        "address" => "",
-                        "city" => "",
-                        "country" => "",
-                        "zip_code" => ""
+                        "contact_name" => $data["billing"]["company"],
+                        "address" => trim($data['billing']['address_1'] + " " + $data['billing']['address_2']),
+                        "country" => $data["billing"]["country"],
+                        "city" => $data["billing"]["city"],
+                        "zip_code" => $data["billing"]["postcode"]
                     );
                     $request->Shipping = array(
-                        "contact_name" => "",
-                        "address" => "",
-                        "city" => "",
-                        "country" => "",
-                        "zip_code" => ""
+                        "contact_name" => $data["shipping"]["company"],
+                        "address" => trim($data['shipping']['address_1'] + " " + $data['shipping']['address_2']),
+                        "country" => $data["shipping"]["country"],
+                        "city" => $data["shipping"]["city"],
+                        "zip_code" => $data["shipping"]["postcode"]
                     );
                     $request->Basket = array(
                         array(
