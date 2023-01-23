@@ -209,9 +209,7 @@ function init() {
             $body["expiry_year"] = $this->CardYear;
             $body["cvv"] = $this->CardCode;
             $body["three_d_pay"] = $this->ThreeDPay;
-            $headers = array();
-            $headers[] = "Content-Type: application/json; charset=utf-8";
-            $headers[] = "Authorization: Bearer " . $this->Token;
+            $headers = array("Content-Type: application/json; charset=utf-8", "Authorization: Bearer " . $this->Token);
             $ch = curl_init("https://checkout.tapsilat.com/api/v1/checkout");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
