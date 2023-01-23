@@ -249,9 +249,7 @@ function init() {
             $body["payment_success_url"] = $this->Callback;
             $body["payment_failure_url"] = $this->Callback;
             $body["locale"] = $this->Locale;
-            $headers = array();
-            $headers[] = "Content-Type: application/json; charset=utf-8";
-            $headers[] = "Authorization: Bearer " . $this->Token;
+            $headers = array("Content-Type: application/json; charset=utf-8", "Authorization: Bearer " . $this->Token);
             $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/create");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
@@ -266,9 +264,7 @@ function init() {
         public function details() {
             $body = array();
             $body["conversation_id"] = $this->ConversationId;
-            $headers = array();
-            $headers[] = "Content-Type: application/json; charset=utf-8";
-            $headers[] = "Authorization: Bearer " . $this->Token;
+            $headers = array("Content-Type: application/json; charset=utf-8", "Authorization: Bearer " . $this->Token);
             $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/payment-details");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
