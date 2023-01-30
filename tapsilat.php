@@ -111,12 +111,17 @@ function init() {
                     $request->Currency = $settings["Currency"];
                     $request->Installment = [1];
                     $request->Buyer = array(
-                        "id" => $data["customer_id"],
+                        "id" => strval($data["customer_id"]),
+                        "identity_number" => "11111111111",
                         "name" => $data["billing"]["first_name"],
                         "surname" => $data["billing"]["last_name"],
                         "email" => $data["billing"]["email"],
                         "gsm_number" => $data["billing"]["phone"],
-                        "ip" => $data["customer_ip_address"]
+                        "registration_address" =>  trim($data["billing"]["address_1"] . " " . $data["billing"]["address_2"]  . " " . $data["billing"]["city"]),
+                        "country" => $countries->get_countries()[$data["billing"]["country"]],
+                        "city" => $countries->get_states($data["billing"]["country"])[$data["billing"]["state"]],
+                        "zip_code" => $data["billing"]["postcode"],
+                        "ip" => $data["customer_ip_address"],
                     );
                     $request->Billing = array(
                         "contact_name" => $data["billing"]["company"],
@@ -135,9 +140,19 @@ function init() {
                     $basket = array();
                     foreach ($order->get_items() as $item) {
                         $product = $item->get_product();
+                        $category_ids = $product->get_category_ids();
+                        $categories = [];
+                        foreach ($category_ids as $category_id) {
+                            $category_term = get_term_by('id', $category_id, 'product_cat');
+                            if ($category_term) {
+                                $categories[] = $category_term->name;
+                            }
+                        }
                         $basket[] = array(
+                            "id" => strval($product->get_id()),
                             "name" => $product->get_name(),
-                            "price" => floatval($product->get_price())
+                            "price" => floatval($product->get_price()),
+                            "category1" => $categories[0],
                         );
                     }
                     $request->Basket = $basket;
