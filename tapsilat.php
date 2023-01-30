@@ -111,6 +111,7 @@ function init() {
                     $request->Currency = $settings["Currency"];
                     $request->Installment = [1];
                     $request->Buyer = array(
+                        "id" => $data["customer_id"],
                         "name" => $data["billing"]["first_name"],
                         "surname" => $data["billing"]["last_name"],
                         "email" => $data["billing"]["email"],
