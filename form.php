@@ -8,7 +8,7 @@ $settings = get_option("woocommerce_tapsilat_settings");
     <section>
         <div class="row">
             <ul class="woocommerce-error" id="errDiv">
-                <li>Payment is faild, your card issuer has responded with this message: <br />
+                <li>Payment failed, your card issuer has responded with this message: <br />
                     <pre><?php print($checkout["error"]); ?></pre>
                     Please re-try your payment.
                 </li>
