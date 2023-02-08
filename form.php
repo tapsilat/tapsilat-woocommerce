@@ -4,12 +4,12 @@ if (!defined("ABSPATH")) {
 }
 $settings = get_option("woocommerce_tapsilat_settings");
 ?>
-<?php if (isset($checkout) && !empty($checkout["error"])) { ?>
+<?php if (isset($response) && !empty($response["error"])) { ?>
     <section>
         <div class="row">
             <ul class="woocommerce-error" id="errDiv">
                 <li>Payment failed, your card issuer has responded with this message: <br />
-                    <pre><?php print($checkout["error"]); ?></pre>
+                    <pre><?php print($response["error"]); ?></pre>
                     Please re-try your payment.
                 </li>
             </ul>
