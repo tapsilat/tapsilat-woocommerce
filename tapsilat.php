@@ -88,16 +88,6 @@ function init() {
                             $woocommerce->cart->empty_cart();
                             wp_redirect($this->get_return_url());
                             exit;
-                        } elseif (isset($paymentstatus["message"])) {
-                            $checkout = array("error" => $paymentstatus["message"]);
-                        } else {
-                            $checkout = array("error" => "Payment failed. Please try again.");
-                        }
-                    } else {
-                        if (isset($response["error"])) {
-                            $checkout = $response;
-                        } else {
-                            $checkout = array("error" => $response);
                         }
                     }
                 } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -137,6 +127,9 @@ function init() {
                         "city" => $countries->get_states($data["shipping"]["country"])[$data["shipping"]["state"]],
                         "zip_code" => $data["shipping"]["postcode"]
                     );
+                    $request->Design = array(
+                        "redirect_url" => $order->get_checkout_payment_url(true) . "&rnd=" . $rnd,
+                    );
                     $basket = array();
                     foreach ($order->get_items() as $item) {
                         $product = $item->get_product();
@@ -156,85 +149,15 @@ function init() {
                         );
                     }
                     $request->Basket = $basket;
-                    if ($settings["3d"] == "yes") {
-                        $request->Callback = $order->get_checkout_payment_url(true) . "&rnd=" . $rnd;
-                    }
                     $request->Locale = substr(get_locale(), 0, 2);
                     $response = $request->create();
                     if (isset($response["reference_id"])) {
-                        $request = new Checkout();
-                        $request->Token = $settings["Token"];
-                        $request->Reference = $response["reference_id"];
-                        $request->CardHolder = $_POST["cardholder"];
-                        $request->CardNumber = $_POST["cardnumber"];
-                        $request->CardMonth = $_POST["cardmonth"];
-                        $request->CardYear =  "20" . $_POST["cardyear"];
-                        $request->CardCode = $_POST["cardcode"];
-                        if ($settings["3d"] == "yes") {
-                            $request->ThreeDPay = true;
-                        } else {
-                            $request->ThreeDPay = false;
-                        }
-                        $checkout = $request->transaction();
-                        if ($settings["3d"] == "yes") {
-                            if (isset($checkout["form"]) && !empty($checkout["form"])) {
-                                $dom = new DomDocument();
-                                $dom->loadHTML(base64_decode($checkout["form"]));
-                                $form = $dom->getElementsByTagName("form")->item(0);
-                                print($dom->savehtml($form));
-                                print("<script>document.payment.submit();</script>");
-                                exit;
-                            }
-                        } else {
-                            if (isset($checkout["paid"]) && $checkout["paid"] == true) {
-                                $order->update_status("processing");
-                                $order->add_order_note("Payment successful, Order ID: " . $response["reference_id"]);
-                                $order->payment_complete();
-                                $woocommerce->cart->empty_cart();
-                                wp_redirect($this->get_return_url());
-                                exit;
-                            }
-                        }
-                    } else {
-                        if (isset($response["error"])) {
-                            $checkout = $response;
-                        } else {
-                            $checkout = array("error" => $response);
-                        }
+                        wp_redirect("https://checkout.tapsilat.com/?reference_id=" . $response["reference_id"]);
+                        exit;
                     }
                 }
                 include plugin_dir_path(__FILE__) . "form.php";
             }
-        }
-    }
-    class Checkout {
-        public $Token;
-        public $Reference;
-        public $CardHolder;
-        public $CardNumber;
-        public $CardMonth;
-        public $CardYear;
-        public $CardCode;
-        public $ThreeDPay;
-        public function transaction() {
-            $body = array();
-            $body["reference_id"] = $this->Reference;
-            $body["holder_name"] = $this->CardHolder;
-            $body["card_number"] = $this->CardNumber;
-            $body["expiry_month"] = $this->CardMonth;
-            $body["expiry_year"] = $this->CardYear;
-            $body["cvv"] = $this->CardCode;
-            $body["three_d_pay"] = $this->ThreeDPay;
-            $ch = curl_init("https://checkout.tapsilat.com/api/v1/checkout");
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_SLASHES));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: application/json; charset=utf-8", "Authorization: Bearer " . $this->Token));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            $output = curl_exec($ch);
-            curl_close($ch);
-            return json_decode($output, true);
         }
     }
     class Order {
@@ -247,7 +170,7 @@ function init() {
         public $Billing;
         public $Shipping;
         public $Basket;
-        public $Callback;
+        public $Design;
         public $Locale;
         public function create() {
             $body = array();
@@ -259,8 +182,7 @@ function init() {
             $body["billing_address"] = $this->Billing;
             $body["shipping_address"] = $this->Shipping;
             $body["basket_items"] = $this->Basket;
-            $body["payment_success_url"] = $this->Callback;
-            $body["payment_failure_url"] = $this->Callback;
+            $body["checkout_design"] = $this->Design;
             $body["locale"] = $this->Locale;
             $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/create");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
