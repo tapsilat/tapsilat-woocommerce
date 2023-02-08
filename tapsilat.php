@@ -151,10 +151,6 @@ function init() {
                     $request->Basket = $basket;
                     $request->Locale = substr(get_locale(), 0, 2);
                     $response = $request->create();
-                    if (isset($response["reference_id"])) {
-                        wp_redirect("https://checkout.tapsilat.com/?reference_id=" . $response["reference_id"]);
-                        exit;
-                    }
                 }
                 include plugin_dir_path(__FILE__) . "form.php";
             }
