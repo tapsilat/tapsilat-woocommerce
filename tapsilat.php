@@ -90,7 +90,7 @@ function init() {
                             exit;
                         }
                     }
-                } elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
+                } else {
                     $data = $order->get_data();
                     $rnd = floor(microtime(true) * 1000);
                     $countries = new WC_Countries();
