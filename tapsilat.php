@@ -24,10 +24,38 @@ function init() {
             $this->id = "tapsilat";
             $this->icon = null;
             $this->has_fields = true;
-            $this->title = "Credit Card/Debit Card or alternative payment methods";
-            $this->method_title = "Credit Card/Debit Card or alternative payment methods";
+            $this->title = $this->get_option("title");
+            $this->method_title = "tapsilat";
             $this->method_description = "Pay with Card/Debit Card or alternative payment methods";
             $this->init_form_fields();
+            if (isset($_POST["woocommerce_tapsilat_enabled"])) {
+                if ($_FILES["woocommerce_tapsilat_logo"]["name"] != ""){
+                    $upload = wp_upload_bits($_FILES["woocommerce_tapsilat_logo"]["name"], null, file_get_contents($_FILES["woocommerce_tapsilat_logo"]["tmp_name"]));
+                    // if upload is successful
+                    if (!$upload["error"]) {
+                        // get file url
+                        $url = $upload["url"];
+                        // get file path
+                        $path = $upload["file"];
+                        // get file type
+                        $type = wp_check_filetype($path);
+                        // set attachment data
+                        $attachment = array(
+                            "guid" => $url,
+                            "post_mime_type" => $type["type"],
+                            "post_title" => preg_replace("/\.[^.]+$/", "", basename($path)),
+                            "post_content" => "",
+                            "post_status" => "inherit"
+                        );
+                        // insert attachment
+                        $attach_id = wp_insert_attachment($attachment, $path);
+                        // set attachment id to tapsilat
+                        $this->settings["tapsilat_logo"] = $attach_id;
+                        // save tapsilat
+                        update_option("woocommerce_tapsilat_settings", $this->settings);
+                    }
+                }
+            }
             $this->init_settings();
             add_action("woocommerce_receipt_" . $this->id, array($this, "receipt"));
             add_action("woocommerce_thankyou_" . $this->id, array($this, "receipt"));
@@ -35,6 +63,19 @@ function init() {
         }
         public function init_form_fields() {
             $this->form_fields = array(
+                "enabled" => array(
+                    "title" => "Enable/Disable",
+                    "label" => "Enable Tapsilat",
+                    "type" => "checkbox",
+                    "desc_tip" => "Enable Tapsilat",
+                    "default" => "yes"
+                ),
+                "title" => array(
+                    "title" => "Title",
+                    "type" => "text",
+                    "desc_tip" => "Title of the payment method",
+                    "default" => "Credit Card/Debit Card or alternative payment methods"
+                ),
                 "Token" => array(
                     "title" => "Token",
                     "type" => "text",
@@ -57,7 +98,87 @@ function init() {
                         "USD" => "$ (USD)",
                         "EUR" => "€ (EUR)",
                     )
-                )
+                ),
+                "API" => array(
+                    "title" => "API",
+                    "type" => "select",
+                    "desc_tip" => "Select API",
+                    "default" => "https://api.tapsilat.com",
+                    "options" => array(
+                        "https://api.tapsilat.com" => "Production",
+                        "https://acquiring.tapsilat.dev" => "Development",
+                    )
+                ),
+                "CheckoutURL" => array(
+                    "title" => "Checkout URL",
+                    "type" => "select",
+                    "desc_tip" => "Select Checkout URL",
+                    "default" => "https://checkout.tapsilat.com",
+                    "options" => array(
+                        "https://checkout.tapsilat.com" => "Production",
+                        "https://checkout.tapsilat.dev" => "Development",
+                    )
+                ),
+                "input_background_color" => array(
+                    "title" => "Input Background Color",
+                    "type" => "color",
+                    "desc_tip" => "Input Background Color",
+                    "default" => "#ffffff"
+                ),
+                "input_text_color" => array(
+                    "title" => "Input Text Color",
+                    "type" => "color",
+                    "desc_tip" => "Input Text Color",
+                    "default" => "#000000"
+                ),
+                "label_text_color" => array(
+                    "title" => "Label Text Color",
+                    "type" => "color",
+                    "desc_tip" => "Label Text Color",
+                    "default" => "#000000"
+                ),
+                "left_background_color" => array(
+                    "title" => "Left Background Color",
+                    "type" => "color",
+                    "desc_tip" => "Left Background Color",
+                    "default" => "#ffffff"
+                ),
+                "right_background_color" => array(
+                    "title" => "Right Background Color",
+                    "type" => "color",
+                    "desc_tip" => "Right Background Color",
+                    "default" => "#ffffff"
+                ),
+                "pay_button_color" => array(
+                    "title" => "Pay Button Color",
+                    "type" => "color",
+                    "desc_tip" => "Pay Button Color",
+                    "default" => "#ffffff"
+                ),
+                "text_color" => array(
+                    "title" => "Text Color",
+                    "type" => "color",
+                    "desc_tip" => "Text Color",
+                    "default" => "#000000"
+                ),
+                "logo" => array(
+                    "title" => "Logo",
+                    "type" => "file",
+                    "desc_tip" => "Logo",
+                    "default" => ""
+                ),
+                "order_detail_html" => array(
+                    "title" => "Order Detail HTML",
+                    "type" => "textarea",
+                    "desc_tip" => "Order Detail HTML",
+                    "default" => ""
+                ),
+                "redirect_url" => array(
+                    "title" => "Redirect URL",
+                    "type" => "text",
+                    "desc_tip" => "Redirect URL",
+                    "default" => ""
+                ),
             );
         }
         public function process_payment($orderid) {
@@ -120,15 +241,32 @@ function init() {
                         "city" => $countries->get_states($data["billing"]["country"])[$data["billing"]["state"]],
                         "zip_code" => $data["billing"]["postcode"]
                     );
+                    @$country = $countries->get_countries($data["shipping"]["country"])[$data["shipping"]["country"]];
+                    if (!$country){
+                        $country = $countries->get_countries()[$data["billing"]["country"]];
+                    }
+                    @$city = $countries->get_states($data["shipping"]["country"])[$data["shipping"]["state"]];
+                    if (!$city){
+                        $city = $countries->get_states($data["billing"]["country"])[$data["billing"]["state"]];
+                    }
                     $request->Shipping = array(
                         "contact_name" => $data["shipping"]["company"],
                         "address" => trim($data["shipping"]["address_1"] . " " . $data["shipping"]["address_2"]  . " " . $data["shipping"]["city"]),
-                        "country" => $countries->get_countries()[$data["shipping"]["country"]],
-                        "city" => $countries->get_states($data["shipping"]["country"])[$data["shipping"]["state"]],
+                        "country" => $country,
+                        "city" => $city,
                         "zip_code" => $data["shipping"]["postcode"]
                     );
                     $request->Design = array(
                         "redirect_url" => $order->get_checkout_payment_url(true) . "&rnd=" . $rnd,
+                        "input_background_color" => $settings["input_background_color"],
+                        "input_text_color" => $settings["input_text_color"],
+                        "label_text_color" => $settings["label_text_color"],
+                        "left_background_color" => $settings["left_background_color"],
+                        "right_background_color" => $settings["right_background_color"],
+                        "pay_button_color" => $settings["pay_button_color"],
+                        "text_color" => $settings["text_color"],
+                        "logo" => wp_get_attachment_url($settings["tapsilat_logo"]),
+                        "order_detail_html" => $settings["order_detail_html"],
                     );
                     $basket = array();
                     foreach ($order->get_items() as $item) {
@@ -144,12 +282,13 @@ function init() {
                         $basket[] = array(
                             "id" => strval($product->get_id()),
                             "name" => $product->get_name(),
-                            "price" => floatval($product->get_price()),
+                            "price" => floatval($product->get_price() * $item->get_quantity()),
                             "category1" => $categories[0],
                         );
                     }
                     $request->Basket = $basket;
                     $request->Locale = substr(get_locale(), 0, 2);
+
                     $response = $request->create();
                 }
                 include plugin_dir_path(__FILE__) . "form.php";
@@ -169,6 +308,7 @@ function init() {
         public $Design;
         public $Locale;
         public function create() {
+            $settings = get_option("woocommerce_tapsilat_settings");
             $body = array();
             $body["conversation_id"] = $this->Conversation;
             $body["amount"] = floatval($this->Amount);
@@ -180,7 +320,8 @@ function init() {
             $body["basket_items"] = $this->Basket;
             $body["checkout_design"] = $this->Design;
             $body["locale"] = $this->Locale;
-            $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/create");
+
+            $ch = curl_init($settings["API"]."/api/v1/order/create");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
             curl_setopt($ch, CURLOPT_POST, 1);
@@ -194,7 +335,7 @@ function init() {
         public function details() {
             $body = array();
             $body["conversation_id"] = $this->Conversation;
-            $ch = curl_init("https://acquiring.tapsilat.com/api/v1/order/payment-details");
+            $ch = curl_init(get_option("woocommerce_tapsilat_settings")["API"]."/api/v1/order/payment-details");
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
             curl_setopt($ch, CURLOPT_POST, 1);
