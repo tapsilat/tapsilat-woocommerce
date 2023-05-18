@@ -119,6 +119,17 @@ function init() {
                         "https://checkout.tapsilat.dev" => "Development",
                     )
                 ),
+                "payment_form_view_mode" => array(
+                    "title" => "Payment Form View Mode",
+                    "type" => "select",
+                    "desc_tip" => "Select View Mode",
+                    "default" => "iframe",
+                    "options" => array(
+                        "iframe" => "Iframe",
+                        "redirect" => "Redirect",
+                        "popup" => "Popup",
+                    )
+                ),
                 "input_background_color" => array(
                     "title" => "Input Background Color",
                     "type" => "color",
@@ -203,12 +214,30 @@ function init() {
                     if (isset($response["order_payment_status"])) {
                         $paymentstatus = $response["order_payment_status"];
                         if (isset($paymentstatus["is_error"]) && $paymentstatus["is_error"] == false) {
-                            $order->update_status("processing");
-                            $order->add_order_note("Payment successful, Order ID: " . $response["order"]["reference_id"]);
-                            $order->payment_complete();
-                            $woocommerce->cart->empty_cart();
-                            wp_redirect($this->get_return_url());
-                            exit;
+                            $paymentDetails = $paymentstatus["payment_details"];
+                            if (isset($paymentDetails["paid_amount"])){
+                                if ($paymentDetails["paid_amount"] == $order["total"]){
+                                    $order->update_status("processing");
+                                    $order->add_order_note("Payment successful, Order ID: " . $response["order"]["reference_id"]);
+                                    $order->payment_complete();
+                                    $woocommerce->cart->empty_cart();
+                                    wp_redirect($this->get_return_url());
+                                    exit;
+                                }else{
+                                    $order->update_status("failed");
+                                    $order->add_order_note("Payment failed, Order ID: " . $response["order"]["reference_id"]);
+                                    $woocommerce->cart->empty_cart();
+                                    wp_redirect($this->get_return_url());
+                                    exit;
+                                }
+                            }else{
+                                $order->update_status("processing");
+                                $order->add_order_note("Payment successful, Order ID: " . $response["order"]["reference_id"]);
+                                $order->payment_complete();
+                                $woocommerce->cart->empty_cart();
+                                wp_redirect($this->get_return_url());
+                                exit;
+                            }
                         }
                     }
                 } else {
@@ -291,7 +320,15 @@ function init() {
 
                     $response = $request->create();
                 }
-                include plugin_dir_path(__FILE__) . "form.php";
+                if ($settings["payment_form_view_mode"]=="redirect") {
+                    $payment_url = get_option("woocommerce_tapsilat_settings")["CheckoutURL"]."/?reference_id=".$response["reference_id"];
+                    wp_redirect($payment_url);
+                    exit;
+                }elseif ($settings["payment_form_view_mode"]=="popup") {
+                    include plugin_dir_path(__FILE__) . "popup.php";
+                }else{
+                    include plugin_dir_path(__FILE__) . "form.php";
+                }
             }
         }
     }
