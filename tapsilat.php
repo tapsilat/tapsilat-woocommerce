@@ -541,6 +541,44 @@ function tapsilat_init_gateway() {
                     ",
                 ),
                 
+                // === BACKUP & RESTORE ===
+                "backup_restore" => array(
+                    "title" => "Backup & Restore Settings",
+                    "type" => "title",
+                    "description" => "Export and import your Tapsilat settings for backup or migration purposes."
+                ),
+                "export_settings" => array(
+                    "title" => "Export Settings",
+                    "type" => "title",
+                    "description" => "
+                        <div style='background: #f9f9f9; padding: 15px; border: 1px solid #ddd; margin: 10px 0;'>
+                            <p><strong>📤 Export Current Settings</strong></p>
+                            <p>Download your current Tapsilat settings as a JSON file for backup or migration.</p>
+                            <button type='button' id='tapsilat-export' class='button button-secondary'>
+                                📄 Export Settings to JSON
+                            </button>
+                            <p><em>Note: Logo files are not included in export. You'll need to re-upload logos after import.</em></p>
+                        </div>
+                    "
+                ),
+                "import_settings" => array(
+                    "title" => "Import Settings",
+                    "type" => "title", 
+                    "description" => "
+                        <div style='background: #fff3cd; padding: 15px; border: 1px solid #ffeaa7; margin: 10px 0;'>
+                            <p><strong>📥 Import Settings from JSON</strong></p>
+                            <p>Upload a previously exported JSON file to restore your Tapsilat settings.</p>
+                            <input type='file' id='tapsilat-import-file' accept='.json' style='margin: 10px 0;' />
+                            <br>
+                            <button type='button' id='tapsilat-import' class='button button-secondary' disabled>
+                                🔄 Import Settings from JSON
+                            </button>
+                            <div id='tapsilat-import-result' style='margin-top: 10px;'></div>
+                            <p><em>⚠️ Warning: This will overwrite all current settings except logos. Make sure to export current settings first!</em></p>
+                        </div>
+                    "
+                ),
+                
                 // === SYSTEM STATUS ===
                 "system_status" => array(
                     "title" => "System Status",
