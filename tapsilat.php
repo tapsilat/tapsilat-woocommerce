@@ -215,10 +215,6 @@ function tapsilat_woocommerce_loaded() {
 }
 
 function tapsilat_init_gateway() {
-    // Check if WooCommerce is active and loaded
-    if (!class_exists("WC_Payment_Gateway") || !function_exists('WC')) {
-        return;
-    }
     
     // Prevent double loading
     if (class_exists('WC_Gateway_Tapsilat')) {
@@ -361,9 +357,12 @@ function tapsilat_init_gateway() {
                 ),
                 "Token" => array(
                     "title" => "API Token",
-                    "type" => "text",
+                    "type" => "password",
                     "description" => "Your Tapsilat API token. You can find this in your Tapsilat merchant dashboard.",
-                    "desc_tip" => true
+                    "desc_tip" => true,
+                    "custom_attributes" => array(
+                        "autocomplete" => "current-password"
+                    )
                 ),
                 "API" => array(
                     "title" => "API Environment",
@@ -541,44 +540,6 @@ function tapsilat_init_gateway() {
                     ",
                 ),
                 
-                // === BACKUP & RESTORE ===
-                "backup_restore" => array(
-                    "title" => "Backup & Restore Settings",
-                    "type" => "title",
-                    "description" => "Export and import your Tapsilat settings for backup or migration purposes."
-                ),
-                "export_settings" => array(
-                    "title" => "Export Settings",
-                    "type" => "title",
-                    "description" => "
-                        <div style='background: #f9f9f9; padding: 15px; border: 1px solid #ddd; margin: 10px 0;'>
-                            <p><strong>📤 Export Current Settings</strong></p>
-                            <p>Download your current Tapsilat settings as a JSON file for backup or migration.</p>
-                            <button type='button' id='tapsilat-export' class='button button-secondary'>
-                                📄 Export Settings to JSON
-                            </button>
-                            <p><em>Note: Logo files are not included in export. You'll need to re-upload logos after import.</em></p>
-                        </div>
-                    "
-                ),
-                "import_settings" => array(
-                    "title" => "Import Settings",
-                    "type" => "title", 
-                    "description" => "
-                        <div style='background: #fff3cd; padding: 15px; border: 1px solid #ffeaa7; margin: 10px 0;'>
-                            <p><strong>📥 Import Settings from JSON</strong></p>
-                            <p>Upload a previously exported JSON file to restore your Tapsilat settings.</p>
-                            <input type='file' id='tapsilat-import-file' accept='.json' style='margin: 10px 0;' />
-                            <br>
-                            <button type='button' id='tapsilat-import' class='button button-secondary' disabled>
-                                🔄 Import Settings from JSON
-                            </button>
-                            <div id='tapsilat-import-result' style='margin-top: 10px;'></div>
-                            <p><em>⚠️ Warning: This will overwrite all current settings except logos. Make sure to export current settings first!</em></p>
-                        </div>
-                    "
-                ),
-                
                 // === SYSTEM STATUS ===
                 "system_status" => array(
                     "title" => "System Status",
@@ -626,9 +587,11 @@ function tapsilat_init_gateway() {
                 return;
             }
             
+
+            
             ?>
             <script type="text/javascript">
-            jQuery(document).ready(function($) {
+            jQuery(function($) {
                 'use strict';
                 
                 // Function to toggle custom URL fields
@@ -639,10 +602,10 @@ function tapsilat_init_gateway() {
                     
                     if (apiEnv === 'custom') {
                         customApiRow.show();
-                        customApiField.prop('disabled', false);
+                        customApiField.prop('disabled', false).removeClass('disabled');
                     } else {
                         customApiRow.hide();
-                        customApiField.prop('disabled', true);
+                        customApiField.prop('disabled', true).addClass('disabled');
                     }
                 }
                 
@@ -654,6 +617,90 @@ function tapsilat_init_gateway() {
                 
                 // Toggle on change
                 $('#woocommerce_tapsilat_API').on('change', toggleCustomFields);
+                
+                // Add token visibility toggle functionality
+                function initTokenToggle() {
+                    var tokenField = $('#woocommerce_tapsilat_Token');
+                    
+                    if (tokenField.length === 0) {
+                        // Try again after a delay if field not found
+                        setTimeout(initTokenToggle, 500);
+                        return;
+                    }
+                    
+                    // Check if button already exists
+                    if ($('#tapsilat-token-toggle').length > 0) {
+                        return;
+                    }
+                    
+                    console.log('Tapsilat: Adding token toggle button');
+                    
+                    // Wrap token field in a container for better control
+                    var wrapper = tokenField.wrap('<div style="position: relative; display: inline-block; width: 100%;"></div>').parent();
+                    
+                    // Create toggle button
+                    var toggleButton = $('<button>', {
+                        'type': 'button',
+                        'id': 'tapsilat-token-toggle',
+                        'class': 'button button-secondary',
+                        'style': 'position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 11px; padding: 2px 6px; height: 24px; z-index: 10;',
+                        'title': 'Toggle token visibility',
+                        'html': '👁️'
+                    });
+                    
+                    // Adjust input padding to make room for button
+                    tokenField.css('padding-right', '40px');
+                    
+                    // Add button to wrapper
+                    wrapper.append(toggleButton);
+                    
+                    console.log('Tapsilat: Token toggle button added');
+                }
+                
+                // Token visibility toggle functionality
+                $(document).on('click', '#tapsilat-token-toggle', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    var button = $(this);
+                    var tokenField = $('#woocommerce_tapsilat_Token');
+                    
+                    if (tokenField.length === 0) {
+                        console.warn('Tapsilat: Token field not found for toggle');
+                        return;
+                    }
+                    
+                    var currentType = tokenField.prop('type');
+                    console.log('Tapsilat: Current token field type:', currentType);
+                    
+                    if (currentType === 'password') {
+                        // Show token
+                        tokenField.prop('type', 'text');
+                        button.html('🙈').css({
+                            'background-color': '#dc3545',
+                            'color': 'white',
+                            'border-color': '#dc3545'
+                        }).attr('title', 'Hide token');
+                        console.log('Tapsilat: Token shown');
+                    } else {
+                        // Hide token
+                        tokenField.prop('type', 'password');
+                        button.html('👁️').css({
+                            'background-color': '',
+                            'color': '',
+                            'border-color': ''
+                        }).attr('title', 'Show token');
+                        console.log('Tapsilat: Token hidden');
+                    }
+                });
+                
+                // Initialize token toggle with multiple attempts
+                initTokenToggle();
+                
+                // Also try when DOM is fully loaded
+                $(window).on('load', function() {
+                    setTimeout(initTokenToggle, 100);
+                });
             });
             </script>
             <?php
