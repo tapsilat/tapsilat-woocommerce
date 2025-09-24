@@ -64,7 +64,11 @@ $settings = get_option("woocommerce_tapsilat_settings");
             btn.onclick = function() {
                 modal.style.display = "block";
                 btn.style.display = "none";
-                iframe.src = "<?php echo get_option("woocommerce_tapsilat_settings")["CheckoutURL"]; ?>/?reference_id=<?php echo $response["reference_id"]; ?>&retry=true";
+                <?php 
+                $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
+                $checkoutUrl = $checkoutProcessor->getCheckoutUrl($response["reference_id"]);
+                ?>
+                iframe.src = "<?php echo esc_url($checkoutUrl); ?>";
             }
 
             span.onclick = function() {
@@ -87,7 +91,7 @@ $settings = get_option("woocommerce_tapsilat_settings");
         <!-- Modal content -->
         <div class="modal-content">
             <span class="close" id="close">&times;</span>
-            <iframe id="iframe_form" src="<?php echo get_option("woocommerce_tapsilat_settings")["CheckoutURL"]; ?>/?reference_id=<?php echo $response["reference_id"]; ?>" width="100%" height="680"></iframe>
+            <iframe id="iframe_form" src="<?php echo esc_url($checkoutUrl); ?>" width="100%" height="680"></iframe>
         </div>
 
     </div>
