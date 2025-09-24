@@ -80,7 +80,7 @@ The plugin includes an intelligent cron job system that automatically monitors a
 
 = How to get API Key? =
 
-You can get API Key from [Tapsilat](https://acquiring.tapsilat.com) website by creating a merchant account.
+You can get API Key from [Tapsilat](https://panel.tapsilat.com) website by creating a merchant account.
 
 = Is this plugin compatible with WooCommerce Blocks? =
 

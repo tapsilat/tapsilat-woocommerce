@@ -46,7 +46,7 @@ Modern payment gateway plugin for WooCommerce that integrates with Tapsilat paym
 
 ### How to get API Key?
 
-You can get API Key from [Tapsilat](https://acquiring.tapsilat.com) website.
+You can get API Key from [Tapsilat](https://panel.tapsilat.com) website.
 
 ### Webhook URLs
 
