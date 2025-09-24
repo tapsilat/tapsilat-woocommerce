@@ -44,12 +44,12 @@ class CheckoutProcessor
                 return $customUrl . '/api/v1/';
             } else {
                 // Default to dev environment when custom is selected but no URL provided
-                return 'https://panel.tapsilat.dev/api/v1/';
+                return 'https://acquiring.tapsilat.com/api/v1/';
             }
         }
         
         // Production environment
-        return 'https://panel.tapsilat.dev/api/v1/';
+        return 'https://acquiring.tapsilat.com/api/v1/';
     }
 
     /**

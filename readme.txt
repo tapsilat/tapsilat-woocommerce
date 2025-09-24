@@ -19,10 +19,15 @@ Tapsilat WooCommerce Plugin provides a secure and modern payment gateway integra
 * Secure payment processing via Tapsilat
 * Support for WooCommerce Blocks (Gutenberg checkout)
 * Multiple payment form display modes (iframe, redirect, popup)
-* Automatic order status management
+* Automatic order status management with configurable cron job
 * Webhook support for real-time payment updates
 * Compatible with WooCommerce HPOS (High-Performance Order Storage)
+* 3D Secure authentication support
 * Multi-currency support (TRY, USD, EUR)
+* Customizable payment form design and branding
+* Advanced order status monitoring and automatic updates
+* Custom logo support for payment method
+* Flexible API environment configuration (Production/Custom)
 
 == Installation ==
 
@@ -39,11 +44,30 @@ Tapsilat WooCommerce Plugin provides a secure and modern payment gateway integra
 * API Environment: Choose between Production or Custom
 * Currency: Select your preferred currency (TRY, USD, EUR)
 
+**Advanced Configuration Options:**
+* 3D Secure: Enable/disable 3D Secure authentication for enhanced security
+* Payment Form Display: Choose between iframe (embedded), redirect, or popup modes
+* Order Status Check Frequency: Configure automatic cron job interval (5, 10, 15, or 30 minutes)
+* Design Customization: Customize colors for input fields, labels, buttons, and panels
+* Custom Logo: Upload custom logos for both payment method and checkout page
+* Custom Metadata: Add additional data to be sent with orders (JSON format)
+
 **Webhook URLs:**
 Configure these URLs in your Tapsilat merchant panel:
 * Success URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-success`
 * Failure URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-failure`
 * Callback URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback`
+
+**Automatic Order Status Updates:**
+The plugin includes an intelligent cron job system that automatically monitors and updates order statuses:
+* Configurable Intervals: Set automatic checks every 5, 10, 15, or 30 minutes
+* Smart Processing: Only checks orders that need status updates to optimize performance
+* Recent Order Skip: Avoids checking recently modified orders to prevent conflicts
+
+**Supported Status Mappings:**
+* SUCCESS/COMPLETED → Processing (Payment completed, order processed)
+* FAILED/CANCELLED/EXPIRED → Failed (Order marked as failed)
+* PENDING/WAITING → On Hold (Order waiting for payment)
 
 == Requirements ==
 
@@ -72,19 +96,28 @@ Webhooks provide real-time updates about payment status. Configure the webhook U
 
 == Screenshots ==
 
-1. Plugin settings page in WooCommerce admin
-2. Tapsilat payment method selection on checkout
-3. Payment form integration options
+1. WordPress Plugin Management Page - View and manage the Tapsilat WooCommerce plugin from the WordPress admin panel
+2. WooCommerce Payment Providers - Tapsilat payment gateway listed among WooCommerce payment methods
+3. Tapsilat Settings Management Page - Comprehensive configuration options for API credentials, payment settings, and customization
+4. Checkout Page with Tapsilat Payment Selection - Customer-facing checkout page showing Tapsilat as a payment option
+5. Payment Processing Page - Secure payment form with card details and 3D Secure authentication
 
 == Changelog ==
 
 = 2025.09.24.1 =
-* Updated version numbering system
-* Secure payment processing via Tapsilat
-* WooCommerce Blocks support
-* Multiple payment form display modes
-* Webhook integration
-* HPOS compatibility
+* Advanced cron job system for automatic order status monitoring
+* Configurable check intervals (5, 10, 15, 30 minutes)
+* Comprehensive design customization options
+* Custom logo support for payment methods
+* 3D Secure authentication toggle
+* Smart order status mapping and updates
+* System status monitoring dashboard
+* Performance optimizations for large order volumes
+* Enhanced admin interface with dynamic field visibility
+* Better error handling and logging
+* Improved API environment configuration
+* Token visibility toggle for security
+* Webhook URL display for easy configuration
 
 = 1.0 =
 * Initial release
