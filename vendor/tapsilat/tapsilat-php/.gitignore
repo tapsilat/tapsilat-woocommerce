@@ -1,0 +1,15 @@
+/vendor/
+composer.lock
+.phpunit.result.cache
+.idea/
+.vscode/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+docker-compose.override.yml 
