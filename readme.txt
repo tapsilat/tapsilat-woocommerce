@@ -1,18 +1,18 @@
-=== Tapsilat WooCommerce Plugin ===
+=== Tapsilat Payment Gateway for WooCommerce ===
 Contributors: wordpress@tapsilat.dev
-Tags: woocommerce, tapsilat, payment, gateway, payments, commerce, blocks
+Tags: tapsilat, payment, gateway, payments, commerce
 Requires at least: 5.0
-Tested up to: 6.0
-Stable tag: 2025.09.24.1
+Tested up to: 6.8
+Stable tag: 2025.09.25.1
 Requires PHP: 7.4
-License: AGPL
-License URI: https://github.com/tapsilat/tapsilat-woocommerce/blob/main/LICENSE.md
+License: GPL v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Modern payment gateway plugin for WooCommerce that integrates with Tapsilat payment system.
+Modern payment gateway for WooCommerce that integrates with Tapsilat payment system.
 
 == Description ==
 
-Tapsilat WooCommerce Plugin provides a secure and modern payment gateway integration for your WooCommerce store. This plugin connects your store with Tapsilat's no-code, cloud-based or on-premise, end-to-end fintech platform - built for speed and scale around your unique business needs.
+Tapsilat Payment Gateway for WooCommerce provides a secure and modern payment gateway integration for your WooCommerce store. This plugin connects your store with Tapsilat's no-code, cloud-based or on-premise, end-to-end fintech platform - built for speed and scale around your unique business needs.
 
 **Key Features:**
 
@@ -103,6 +103,19 @@ Webhooks provide real-time updates about payment status. Configure the webhook U
 5. Payment Processing Page - Secure payment form with card details and 3D Secure authentication
 
 == Changelog ==
+
+= 2025.09.25.1 =
+* Enhanced security with comprehensive input sanitization and XSS protection
+* Added explicit nonce verification for all form submissions (CSRF protection)
+* Implemented proper user capability checks for admin operations
+* Improved logging system with sanitization to prevent log injection attacks
+* Removed deprecated load_plugin_textdomain() function (WordPress 4.6+ compatibility)
+* Replaced error_log() with WooCommerce logger for production safety
+* Enhanced popup and form templates with better security and accessibility
+* Added proper escaping for all user-facing outputs
+* Optimized admin scripts loading (only on relevant pages)
+* WordPress Plugin Check compliance improvements
+* Code quality enhancements following WordPress coding standards
 
 = 2025.09.24.1 =
 * Advanced cron job system for automatic order status monitoring

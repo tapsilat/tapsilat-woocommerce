@@ -2,7 +2,7 @@
 
 Modern payment gateway plugin for WooCommerce that integrates with Tapsilat payment system.
 
-**Version:** 2025.09.24.1
+**Version:** 2025.09.25.1
 
 ## Features
 
