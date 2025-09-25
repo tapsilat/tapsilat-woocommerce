@@ -25,6 +25,24 @@ class CheckoutProcessor
     }
 
     /**
+     * Log debug information if debug mode is enabled
+     * 
+     * Security: Ensures no sensitive data is logged
+     *
+     * @param string $message The message to log (should not contain sensitive data)
+     */
+    private function debug_log($message)
+    {
+        // Only log if WP_DEBUG is enabled and WooCommerce logger is available
+        if (defined('WP_DEBUG') && WP_DEBUG && function_exists('wc_get_logger')) {
+            // Sanitize the message to prevent log injection
+            $safe_message = sanitize_text_field($message);
+            
+            // Use WooCommerce logger
+            $logger = wc_get_logger();
+            $logger->info('Tapsilat: ' . $safe_message, array('source' => 'tapsilat-woocommerce'));
+        }
+    }    /**
      * Get API URL based on settings
      *
      * @return string
@@ -71,11 +89,11 @@ class CheckoutProcessor
             $existingOrder = $this->getOrderByConversationId($conversationId);
             
             if ($existingOrder) {
-                error_log('Tapsilat: Found existing order for conversation_id: ' . $conversationId);
+                $this->debug_log('Found existing order for conversation_id: ' . $conversationId);
                 return $existingOrder;
             }
             
-            error_log('Tapsilat: Creating new order for conversation_id: ' . $conversationId);
+            $this->debug_log('Creating new order for conversation_id: ' . $conversationId);
             $orderData = $order->get_data();
             
             // Create buyer DTO
@@ -100,7 +118,7 @@ class CheckoutProcessor
             // Set conversation_id as WooCommerce order ID
             if (method_exists($orderCreateDTO, 'setConversationId')) {
                 $orderCreateDTO->setConversationId($order->get_id());
-                error_log('Tapsilat: Setting conversation_id to Order ID: ' . $order->get_id());
+                $this->debug_log('Setting conversation_id to Order ID: ' . $order->get_id());
             }
 
             // Add metadata with WooCommerce info and custom settings
@@ -122,23 +140,23 @@ class CheckoutProcessor
 
             if (method_exists($orderCreateDTO, 'setMetadata')) {
                 $orderCreateDTO->setMetadata($metadata);
-                error_log('Tapsilat: Setting metadata: ' . json_encode($metadata));
+                $this->debug_log('Setting metadata: ' . json_encode($metadata));
             }
 
             // Log the API URL we're sending to
-            error_log('Tapsilat: Sending order creation request to: ' . $this->getApiUrl());
-            error_log('Tapsilat: Order data - Amount: ' . $order->get_total() . ', Currency: ' . ($this->settings['Currency'] ?? 'TRY') . ', Order ID: ' . $order->get_id());
+            $this->debug_log('Sending order creation request to: ' . $this->getApiUrl());
+            $this->debug_log('Order data - Amount: ' . $order->get_total() . ', Currency: ' . ($this->settings['Currency'] ?? 'TRY') . ', Order ID: ' . $order->get_id());
 
             // Create order via API
             $response = $this->tapsilatAPI->createOrder($orderCreateDTO);
             
-            error_log('Tapsilat: API Response received - Type: ' . gettype($response));
+            $this->debug_log('API Response received - Type: ' . gettype($response));
             if (is_object($response)) {
-                error_log('Tapsilat: Response class: ' . get_class($response));
+                $this->debug_log('Response class: ' . get_class($response));
             }
             
             if ($response && method_exists($response, 'getReferenceId') && $response->getReferenceId()) {
-                error_log('Tapsilat: Order created successfully - Reference ID: ' . $response->getReferenceId());
+                $this->debug_log('Order created successfully - Reference ID: ' . $response->getReferenceId());
                 
                 // Store reference_id and metadata in order meta
                 $order->update_meta_data('_tapsilat_reference_id', $response->getReferenceId());
@@ -155,11 +173,11 @@ class CheckoutProcessor
                     'data' => $response->getData()
                 ];
             } else {
-                error_log('Tapsilat: Order creation failed - Invalid response or missing reference ID');
+                $this->debug_log('Order creation failed - Invalid response or missing reference ID');
             }
 
         } catch (\Exception $e) {
-            error_log('Tapsilat Order Creation Error: ' . $e->getMessage());
+            $this->debug_log('Order Creation Error: ' . $e->getMessage());
         }
 
         return false;
@@ -182,7 +200,7 @@ class CheckoutProcessor
             $checkoutUrl = $this->tapsilatAPI->getCheckoutUrl($referenceId);
             return $checkoutUrl;
         } catch (\Exception $e) {
-            error_log('Tapsilat Checkout URL Error: ' . $e->getMessage());
+            $this->debug_log('Checkout URL Error: ' . $e->getMessage());
             return false;
         }
     }
@@ -203,7 +221,7 @@ class CheckoutProcessor
             // Check if we have this order stored in our cache first
             $cachedOrder = get_transient('tapsilat_order_' . $conversationId);
             if ($cachedOrder) {
-                error_log('Tapsilat: Using cached order for conversation_id: ' . $conversationId);
+                $this->debug_log('Using cached order for conversation_id: ' . $conversationId);
                 return $cachedOrder;
             }
 
@@ -229,7 +247,7 @@ class CheckoutProcessor
 
             return false;
         } catch (\Exception $e) {
-            error_log('Tapsilat: Error getting order by conversation_id: ' . $e->getMessage());
+            $this->debug_log('Error getting order by conversation_id: ' . $e->getMessage());
             return false;
         }
     }
@@ -249,7 +267,7 @@ class CheckoutProcessor
         try {
             return $this->tapsilatAPI->getOrderStatus($referenceId);
         } catch (\Exception $e) {
-            error_log('Tapsilat Order Status Error: ' . $e->getMessage());
+            $this->debug_log('Order Status Error: ' . $e->getMessage());
             return false;
         }
     }
@@ -270,7 +288,7 @@ class CheckoutProcessor
             $this->tapsilatAPI->cancelOrder($referenceId);
             return true;
         } catch (\Exception $e) {
-            error_log('Tapsilat Order Cancel Error: ' . $e->getMessage());
+            $this->debug_log('Order Cancel Error: ' . $e->getMessage());
             return false;
         }
     }

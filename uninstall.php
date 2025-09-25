@@ -20,8 +20,13 @@ wp_clear_scheduled_hook('tapsilat_check_order_status');
 
 // Remove custom cron schedules (they will be automatically removed when the plugin is deleted)
 
-// Log uninstall for debugging purposes
-error_log('Tapsilat WooCommerce: Plugin uninstalled and all settings cleaned up');
+// Log uninstall for debugging purposes (only in debug mode)
+if (defined('WP_DEBUG') && WP_DEBUG) {
+    // Use WordPress logging function instead of error_log
+    if (function_exists('wp_debug_log')) {
+        wp_debug_log('Tapsilat WooCommerce: Plugin uninstalled and all settings cleaned up');
+    }
+}
 
 // Note: We don't remove order meta data or logs as those might be needed for accounting purposes
 // Order data in wp_posts and wp_postmeta tables with payment_method = 'tapsilat' is preserved

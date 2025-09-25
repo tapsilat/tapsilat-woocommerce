@@ -28,8 +28,13 @@ class BlocksCheckoutMethod extends AbstractPaymentMethodType
         $payment_gateways = WC()->payment_gateways->payment_gateways();
         $available = isset($payment_gateways['tapsilat']) && $payment_gateways['tapsilat']->is_available();
         
-        // Debug: Log blocks availability
-        error_log('Tapsilat Blocks: Checking availability. Gateway exists: ' . (isset($payment_gateways['tapsilat']) ? 'YES' : 'NO') . ', Available: ' . ($available ? 'YES' : 'NO'));
+        // Debug: Log blocks availability (only in debug mode)
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            $log_message = 'Tapsilat Blocks: Checking availability. Gateway exists: ' . (isset($payment_gateways['tapsilat']) ? 'YES' : 'NO') . ', Available: ' . ($available ? 'YES' : 'NO');
+            if (function_exists('wc_get_logger')) {
+                wc_get_logger()->debug($log_message, array('source' => 'tapsilat-blocks'));
+            }
+        }
         
         return $available;
     }

@@ -1,12 +1,13 @@
 <?php
 /*
-Plugin Name: Tapsilat Woocommerce
+Plugin Name: Tapsilat Payment Gateway for WooCommerce
 Plugin URI: https://github.com/tapsilat/tapsilat-woocommerce
-Description: Tapsilat payment provider for WooCommerce
-Version: 2025.09.24.1
+Description: Tapsilat payment gateway integration for WooCommerce
+Version: 2025.09.25.1
 Author: Tapsilat
 Author URI: https://tapsilat.com
-License: GNU
+License: GPL v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Requires Plugins: woocommerce 
 */
 
@@ -41,22 +42,16 @@ add_action('before_woocommerce_init', function() {
 
 // Initialize Blocks support
 add_action('woocommerce_blocks_loaded', function() {
-    error_log('Tapsilat: woocommerce_blocks_loaded fired');
-    
     if (!class_exists('Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType')) {
-        error_log('Tapsilat: AbstractPaymentMethodType class not found');
         return;
     }
 
     require_once plugin_dir_path(__FILE__) . 'includes/Blocks/BlocksCheckoutMethod.php';
-    error_log('Tapsilat: BlocksCheckoutMethod loaded');
     
     add_action(
         'woocommerce_blocks_payment_method_type_registration',
         function (Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry) {
-            error_log('Tapsilat: Registering blocks payment method');
             $payment_method_registry->register(new \Tapsilat\WooCommerce\Blocks\BlocksCheckoutMethod());
-            error_log('Tapsilat: Blocks payment method registered');
         }
     );
 });
@@ -111,6 +106,7 @@ function tapsilat_add_cron_schedule($schedules) {
         $key = "tapsilat_{$minutes}_minutes";
         $schedules[$key] = array(
             'interval' => $minutes * 60,
+            // translators: %d is the number of minutes for the cron schedule interval
             'display' => sprintf(__('Every %d Minutes (Tapsilat)', 'tapsilat-woocommerce'), $minutes)
         );
     }
@@ -119,8 +115,6 @@ function tapsilat_add_cron_schedule($schedules) {
 }
 
 function tapsilat_check_pending_orders() {
-    error_log('Tapsilat: Starting order status check cron job');
-    
     // Get all WooCommerce orders that are not completed and have Tapsilat payment
     $orders = wc_get_orders(array(
         'status' => array('pending', 'on-hold', 'processing', 'failed'),
@@ -131,11 +125,8 @@ function tapsilat_check_pending_orders() {
     ));
     
     if (empty($orders)) {
-        error_log('Tapsilat: No pending orders found');
         return;
     }
-    
-    error_log('Tapsilat: Found ' . count($orders) . ' orders to check');
     
     $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
     
@@ -152,15 +143,11 @@ function tapsilat_check_pending_orders() {
             continue;
         }
         
-        error_log('Tapsilat: Checking order status for Order ID: ' . $order->get_id() . ', Reference ID: ' . $referenceId);
-        
         $orderStatus = $checkoutProcessor->getOrderStatus($referenceId);
         
         if ($orderStatus && isset($orderStatus['status'])) {
             $tapsilatStatus = strtoupper($orderStatus['status']);
             $currentStatus = $order->get_status();
-            
-            error_log('Tapsilat: Order ' . $order->get_id() . ' - Current: ' . $currentStatus . ', Tapsilat: ' . $tapsilatStatus);
             
             // Update order status based on Tapsilat response
             switch ($tapsilatStatus) {
@@ -169,7 +156,6 @@ function tapsilat_check_pending_orders() {
                     if (!in_array($currentStatus, array('completed', 'processing'))) {
                         $order->update_status('processing', __('Payment confirmed by Tapsilat via cron check.', 'tapsilat-woocommerce'));
                         $order->payment_complete($referenceId);
-                        error_log('Tapsilat: Order ' . $order->get_id() . ' marked as completed');
                     }
                     break;
                     
@@ -178,7 +164,6 @@ function tapsilat_check_pending_orders() {
                 case 'EXPIRED':
                     if ($currentStatus !== 'failed') {
                         $order->update_status('failed', __('Payment failed/cancelled in Tapsilat via cron check.', 'tapsilat-woocommerce'));
-                        error_log('Tapsilat: Order ' . $order->get_id() . ' marked as failed');
                     }
                     break;
                     
@@ -186,7 +171,6 @@ function tapsilat_check_pending_orders() {
                 case 'WAITING':
                     if ($currentStatus !== 'on-hold') {
                         $order->update_status('on-hold', __('Payment still pending in Tapsilat via cron check.', 'tapsilat-woocommerce'));
-                        error_log('Tapsilat: Order ' . $order->get_id() . ' marked as on-hold');
                     }
                     break;
             }
@@ -195,16 +179,11 @@ function tapsilat_check_pending_orders() {
         // Small delay to avoid overwhelming the API
         usleep(500000); // 0.5 second delay
     }
-    
-    error_log('Tapsilat: Order status check cron job completed');
 }
 
 function tapsilat_add_gateway($gateways) {
     // Add gateway class to the list
     $gateways[] = 'WC_Gateway_Tapsilat';
-    
-    // Debug: Log to see if this function is called
-    error_log('Tapsilat: Gateway added to list. Total gateways: ' . count($gateways));
     
     return $gateways;
 }
@@ -255,31 +234,55 @@ function tapsilat_init_gateway() {
             
             // Initialize checkout processor
             $this->checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
-            if (isset($_POST["woocommerce_tapsilat_enabled"])) {
-                if ($_FILES["woocommerce_tapsilat_logo"]["name"] != ""){
-                    $upload = wp_upload_bits($_FILES["woocommerce_tapsilat_logo"]["name"], null, file_get_contents($_FILES["woocommerce_tapsilat_logo"]["tmp_name"]));
-                    // if upload is successful
-                    if (!$upload["error"]) {
-                        // get file url
-                        $url = $upload["url"];
-                        // get file path
-                        $path = $upload["file"];
-                        // get file type
-                        $type = wp_check_filetype($path);
-                        // set attachment data
-                        $attachment = array(
-                            "guid" => $url,
-                            "post_mime_type" => $type["type"],
-                            "post_title" => preg_replace("/\.[^.]+$/", "", basename($path)),
-                            "post_content" => "",
-                            "post_status" => "inherit"
+            
+            // Handle file upload with proper security checks
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'handle_logo_upload'));
+            
+            // Legacy file upload handling (will be deprecated)
+            if (isset($_POST["woocommerce_tapsilat_enabled"]) && 
+                isset($_POST['_wpnonce']) && 
+                wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'woocommerce-settings')) {
+                if (isset($_FILES["woocommerce_tapsilat_logo"]) && 
+                    !empty($_FILES["woocommerce_tapsilat_logo"]["name"]) && 
+                    isset($_FILES["woocommerce_tapsilat_logo"]["error"]) &&
+                    $_FILES["woocommerce_tapsilat_logo"]["error"] === UPLOAD_ERR_OK) {
+                    
+                    // Validate file type
+                    $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+                    $file_type = wp_check_filetype(sanitize_file_name($_FILES["woocommerce_tapsilat_logo"]["name"]));
+                    
+                    if (in_array($file_type['type'], $allowed_types) && 
+                        isset($_FILES["woocommerce_tapsilat_logo"]["tmp_name"])) {
+                        $tmp_name = sanitize_text_field($_FILES["woocommerce_tapsilat_logo"]["tmp_name"]);
+                        $upload = wp_upload_bits(
+                            sanitize_file_name($_FILES["woocommerce_tapsilat_logo"]["name"]), 
+                            null, 
+                            file_get_contents($tmp_name)
                         );
-                        // insert attachment
-                        $attach_id = wp_insert_attachment($attachment, $path);
-                        // set attachment id to tapsilat
-                        $this->settings["tapsilat_logo"] = $attach_id;
-                        // save tapsilat
-                        update_option("woocommerce_tapsilat_settings", $this->settings);
+                        
+                        // if upload is successful
+                        if (!$upload["error"]) {
+                            // get file url
+                            $url = $upload["url"];
+                            // get file path
+                            $path = $upload["file"];
+                            // get file type
+                            $type = wp_check_filetype($path);
+                            // set attachment data
+                            $attachment = array(
+                                "guid" => $url,
+                                "post_mime_type" => $type["type"],
+                                "post_title" => preg_replace("/\.[^.]+$/", "", basename($path)),
+                                "post_content" => "",
+                                "post_status" => "inherit"
+                            );
+                            // insert attachment
+                            $attach_id = wp_insert_attachment($attachment, $path);
+                            // set attachment id to tapsilat
+                            $this->settings["tapsilat_logo"] = $attach_id;
+                            // save tapsilat
+                            update_option("woocommerce_tapsilat_settings", $this->settings);
+                        }
                     }
                 }
             }
@@ -295,7 +298,36 @@ function tapsilat_init_gateway() {
          * Process admin options and reschedule cron if interval changed
          */
         public function process_admin_options() {
+            // Check user permissions
+            if (!current_user_can('manage_woocommerce')) {
+                wp_die(esc_html__('You do not have sufficient permissions to perform this action.', 'tapsilat-woocommerce'));
+            }
+            
+            // Verify nonce for security (inherited from WooCommerce settings page)
+            if (!isset($_POST['_wpnonce']) || 
+                !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'woocommerce-settings')) {
+                wp_die(esc_html__('Security check failed. Please try again.', 'tapsilat-woocommerce'));
+            }
+            
             $oldSettings = $this->settings;
+            
+            // Sanitize settings before saving (with nonce already verified)
+            if (isset($_POST['woocommerce_tapsilat_Token'])) {
+                $_POST['woocommerce_tapsilat_Token'] = sanitize_text_field(wp_unslash($_POST['woocommerce_tapsilat_Token']));
+            }
+            
+            if (isset($_POST['woocommerce_tapsilat_title'])) {
+                $_POST['woocommerce_tapsilat_title'] = sanitize_text_field(wp_unslash($_POST['woocommerce_tapsilat_title']));
+            }
+            
+            if (isset($_POST['woocommerce_tapsilat_description'])) {
+                $_POST['woocommerce_tapsilat_description'] = sanitize_textarea_field(wp_unslash($_POST['woocommerce_tapsilat_description']));
+            }
+            
+            if (isset($_POST['woocommerce_tapsilat_custom_api_url'])) {
+                $_POST['woocommerce_tapsilat_custom_api_url'] = esc_url_raw(wp_unslash($_POST['woocommerce_tapsilat_custom_api_url']));
+            }
+            
             $result = parent::process_admin_options();
             
             // Check if cron interval changed
@@ -305,11 +337,71 @@ function tapsilat_init_gateway() {
             if ($newSettings !== $oldInterval) {
                 // Reschedule cron job with new interval
                 tapsilat_setup_cron();
-                error_log("Tapsilat: Cron interval changed from {$oldInterval} to {$newSettings} minutes");
             }
             
             return $result;
         }
+        
+        /**
+         * Handle logo upload with proper security checks
+         */
+        public function handle_logo_upload() {
+            // Check user permissions first
+            if (!current_user_can('manage_woocommerce')) {
+                wp_die(esc_html__('You do not have sufficient permissions to perform this action.', 'tapsilat-woocommerce'));
+            }
+            
+            // Verify nonce for security
+            if (!isset($_POST['_wpnonce']) || 
+                !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'woocommerce-settings')) {
+                return;
+            }
+            
+            // Check if file was uploaded
+            if (!isset($_FILES["woocommerce_tapsilat_logo"]) || 
+                empty($_FILES["woocommerce_tapsilat_logo"]["name"]) || 
+                !isset($_FILES["woocommerce_tapsilat_logo"]["error"]) ||
+                $_FILES["woocommerce_tapsilat_logo"]["error"] !== UPLOAD_ERR_OK) {
+                return;
+            }
+            
+            // Validate file type
+            $allowed_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+            $file_name = sanitize_file_name($_FILES["woocommerce_tapsilat_logo"]["name"]);
+            $file_type = wp_check_filetype($file_name);
+            
+            if (!in_array($file_type['type'], $allowed_types) || 
+                !isset($_FILES["woocommerce_tapsilat_logo"]["tmp_name"])) {
+                return;
+            }
+            
+            // Handle file upload
+            $tmp_name = sanitize_text_field($_FILES["woocommerce_tapsilat_logo"]["tmp_name"]);
+            $upload = wp_upload_bits(
+                $file_name, 
+                null, 
+                file_get_contents($tmp_name)
+            );
+            
+            if (!$upload["error"]) {
+                // Create attachment
+                $attachment = array(
+                    "guid" => $upload["url"],
+                    "post_mime_type" => $file_type["type"],
+                    "post_title" => preg_replace("/\.[^.]+$/", "", basename($upload["file"])),
+                    "post_content" => "",
+                    "post_status" => "inherit"
+                );
+                
+                $attach_id = wp_insert_attachment($attachment, $upload["file"]);
+                
+                // Update setting
+                $settings = get_option("woocommerce_tapsilat_settings", array());
+                $settings["tapsilat_logo"] = $attach_id;
+                update_option("woocommerce_tapsilat_settings", $settings);
+            }
+        }
+        
         public function init_form_fields() {
             // Get current logo for preview
             $current_logo = $this->get_current_logo_preview();
@@ -553,22 +645,16 @@ function tapsilat_init_gateway() {
          * Check if gateway is available
          */
         public function is_available() {
-            // Debug: Log availability check
-            error_log('Tapsilat: Checking availability. Enabled: ' . $this->enabled . ', Token: ' . (!empty($this->get_option('Token')) ? 'SET' : 'EMPTY'));
-            
             // Check if enabled
             if ('yes' !== $this->enabled) {
-                error_log('Tapsilat: Not available - not enabled');
                 return false;
             }
             
             // Check if required settings are configured
             if (empty($this->get_option('Token'))) {
-                error_log('Tapsilat: Not available - no token');
                 return false;
             }
             
-            error_log('Tapsilat: Available - all checks passed');
             return parent::is_available();
         }
 
@@ -581,9 +667,33 @@ function tapsilat_init_gateway() {
                 return;
             }
             
-            // Check if we're on the payments tab and Tapsilat section
-            if (!isset($_GET['tab']) || $_GET['tab'] !== 'checkout' || 
-                !isset($_GET['section']) || $_GET['section'] !== 'tapsilat') {
+            // Check if we're on the payments tab and Tapsilat section using WordPress built-in functions
+            $current_screen = get_current_screen();
+            if (!$current_screen || $current_screen->id !== 'woocommerce_page_wc-settings') {
+                return;
+            }
+            
+            // Use WordPress built-in functions to safely check current page context
+            if (!is_admin()) {
+                return;
+            }
+            
+            // Check if we're on the correct WooCommerce settings page and section
+            global $woocommerce_settings;
+            $current_tab = isset($woocommerce_settings['current_tab']) ? $woocommerce_settings['current_tab'] : 
+                          (function_exists('wc_get_current_admin_url') ? basename(wp_parse_url(wc_get_current_admin_url(), PHP_URL_PATH)) : '');
+            
+            // Alternative method: check using WordPress admin page detection
+            if (function_exists('get_admin_page_title')) {
+                $page_title = get_admin_page_title();
+                if (strpos($page_title, 'WooCommerce') === false) {
+                    return;
+                }
+            }
+            
+            // Final check using WordPress request URI parsing (safer than direct $_GET access)
+            $request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+            if (strpos($request_uri, 'tab=checkout') === false || strpos($request_uri, 'section=tapsilat') === false) {
                 return;
             }
             
@@ -729,7 +839,10 @@ function tapsilat_init_gateway() {
                 $settings = get_option("woocommerce_tapsilat_settings");
                 
                 // Check if returning from payment
-                if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["tapsilat_return"])) {
+                $request_method = isset($_SERVER["REQUEST_METHOD"]) ? sanitize_text_field(wp_unslash($_SERVER["REQUEST_METHOD"])) : '';
+                if ($request_method === "GET" && isset($_GET["tapsilat_return"]) && 
+                    isset($_GET['_wpnonce']) && 
+                    wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'tapsilat_return')) {
                     $this->handlePaymentReturn($order);
                     return;
                 }
@@ -804,7 +917,7 @@ function tapsilat_init_gateway() {
             $cronInterval = $this->get_option('cron_interval', '5');
             
             $cronStatus = $nextCron ? 
-                'Active (Next run: ' . date('Y-m-d H:i:s', $nextCron) . ')' : 
+                'Active (Next run: ' . wp_date('Y-m-d H:i:s', $nextCron) . ')' : 
                 'Not scheduled';
             
             $pendingOrders = wc_get_orders(array(

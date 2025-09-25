@@ -82,8 +82,9 @@ class WebhookController extends WP_REST_Controller
      */
     public function handle_payment_success(WP_REST_Request $request)
     {
-        $reference_id = $request->get_param('reference_id');
-        $conversation_id = $request->get_param('conversation_id');
+        // Sanitize input parameters
+        $reference_id = sanitize_text_field($request->get_param('reference_id'));
+        $conversation_id = sanitize_text_field($request->get_param('conversation_id'));
 
         if (!$reference_id && !$conversation_id) {
             return new WP_Error(
@@ -145,8 +146,9 @@ class WebhookController extends WP_REST_Controller
      */
     public function handle_payment_failure(WP_REST_Request $request)
     {
-        $reference_id = $request->get_param('reference_id');
-        $conversation_id = $request->get_param('conversation_id');
+        // Sanitize input parameters
+        $reference_id = sanitize_text_field($request->get_param('reference_id'));
+        $conversation_id = sanitize_text_field($request->get_param('conversation_id'));
 
         if (!$reference_id && !$conversation_id) {
             return new WP_Error(
@@ -198,8 +200,8 @@ class WebhookController extends WP_REST_Controller
             );
         }
 
-        $reference_id = $data['reference_id'];
-        $status = $data['status'] ?? null;
+        $reference_id = sanitize_text_field($data['reference_id']);
+        $status = isset($data['status']) ? sanitize_text_field($data['status']) : null;
 
         // Find order by reference_id
         $order = $this->find_order_by_reference_id($reference_id);
@@ -239,13 +241,38 @@ class WebhookController extends WP_REST_Controller
             return false;
         }
 
+        // First check transient cache for better performance
+        $cache_key = 'tapsilat_order_ref_' . md5($reference_id);
+        $cached_order_id = get_transient($cache_key);
+        
+        if ($cached_order_id !== false) {
+            $order = wc_get_order($cached_order_id);
+            if ($order && $order->get_meta('_tapsilat_reference_id') === $reference_id) {
+                return $order;
+            }
+            // If cached order doesn't match, delete the cache
+            delete_transient($cache_key);
+        }
+
+        // Use optimized query with specific parameters to minimize database load
         $orders = wc_get_orders([
-            'meta_key' => '_tapsilat_reference_id',
-            'meta_value' => $reference_id,
+            'meta_key' => '_tapsilat_reference_id', // @codingStandardsIgnoreLine - Necessary for payment processing
+            'meta_value' => $reference_id, // @codingStandardsIgnoreLine - Necessary for payment processing
             'limit' => 1,
+            'return' => 'objects',
+            'status' => ['pending', 'on-hold', 'processing', 'completed', 'failed'], // Limit to relevant statuses
+            'orderby' => 'date',
+            'order' => 'DESC'
         ]);
 
-        return !empty($orders) ? $orders[0] : false;
+        if (!empty($orders)) {
+            $order = $orders[0];
+            // Cache the result for 5 minutes to improve performance
+            set_transient($cache_key, $order->get_id(), 5 * MINUTE_IN_SECONDS);
+            return $order;
+        }
+
+        return false;
     }
 
     /**

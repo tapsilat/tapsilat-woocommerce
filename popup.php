@@ -1,18 +1,25 @@
-﻿<?php
+<?php
+/**
+ * Popup payment form template
+ * 
+ * Security: All outputs are properly escaped to prevent XSS
+ */
 if (!defined("ABSPATH")) {
     exit;
 }
-$settings = get_option("woocommerce_tapsilat_settings");
+
+// Get settings with proper sanitization
+$settings = get_option("woocommerce_tapsilat_settings", array());
 ?>
-<?php if (!isset($settings["Token"])) { ?>
+<?php if (empty($settings["Token"])) { ?>
     <section>
         <div class="row">
             <ul class="woocommerce-error" id="errDiv">
-                <li>Payment is not active</li>
+                <li><?php esc_html_e('Payment is not active', 'tapsilat-woocommerce'); ?></li>
             </ul>
         </div>
     </section>
-<?php } else if(isset($response["reference_id"])){ ?>
+<?php } else if(isset($response["reference_id"]) && !empty($response["reference_id"])){ ?>
     <style>
         .modal {
             display: block;
@@ -66,7 +73,7 @@ $settings = get_option("woocommerce_tapsilat_settings");
                 btn.style.display = "none";
                 <?php 
                 $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
-                $checkoutUrl = $checkoutProcessor->getCheckoutUrl($response["reference_id"]);
+                $checkoutUrl = $checkoutProcessor->getCheckoutUrl(sanitize_text_field($response["reference_id"]));
                 ?>
                 iframe.src = "<?php echo esc_url($checkoutUrl); ?>";
             }
@@ -84,7 +91,7 @@ $settings = get_option("woocommerce_tapsilat_settings");
             }
         }
     </script>
-    <button id="open_payment_form" class="open_payment_form">Open Payment Form</button>
+    <button id="open_payment_form" class="open_payment_form"><?php esc_html_e('Open Payment Form', 'tapsilat-woocommerce'); ?></button>
 
     <div id="payment_form" class="modal">
 
