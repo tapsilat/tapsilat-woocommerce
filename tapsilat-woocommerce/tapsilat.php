@@ -462,7 +462,7 @@ function tapsilat_init_gateway() {
                     "description" => "Select production for live payments or custom for development/testing.",
                     "default" => "production",
                     "options" => array(
-                        "production" => "Production (acquiring.tapsilat.com/api/v1)",
+                        "production" => "Production (panel.tapsilat.com/api/v1)",
                         "custom" => "Custom/Development Environment",
                     ),
                     "desc_tip" => true,
@@ -471,11 +471,11 @@ function tapsilat_init_gateway() {
                 "custom_api_url" => array(
                     "title" => "Custom API URL",
                     "type" => "text", 
-                    "description" => "Enter your custom Tapsilat API URL. Leave empty to use default dev environment (acquiring.tapsilat.com/api/v1).",
-                    "default" => "https://acquiring.tapsilat.com/api/v1",
+                    "description" => "Enter your custom Tapsilat API URL. Leave empty to use default dev environment (panel.tapsilat.dev/api/v1).",
+                    "default" => "https://panel.tapsilat.dev/api/v1",
                     "desc_tip" => true,
                     "class" => "custom-api-url-field",
-                    "placeholder" => "https://acquiring.tapsilat.com/api/v1"
+                    "placeholder" => "https://panel.tapsilat.dev/api/v1"
                 ),
                 
                 // === PAYMENT SETTINGS ===

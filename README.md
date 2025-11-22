@@ -79,6 +79,45 @@ The plugin includes an intelligent cron job system that automatically monitors a
 - PHP 7.4 or higher
 - Tapsilat merchant account
 
+## Local Development Environment
+
+Spin up a full WordPress + WooCommerce stack with Docker for rapid plugin development and hot reloading.
+
+### Prerequisites
+
+- Docker Desktop 4.0+ with Compose V2 enabled
+- Ports `8080` (HTTP) and `3306` (MySQL) available on your host
+
+### Quick start
+
+1. Copy the sample env file and adjust credentials if needed:
+   ```bash
+   cp .env.example .env
+   ```
+2. Start the stack from the repository root:
+   ```bash
+   docker compose up -d --build
+   ```
+3. Visit `http://localhost:8080` (or the `WEB_PORT` you configured) and finish the WordPress installation wizard.
+4. Log in to the admin panel, activate the **Tapsilat WooCommerce** plugin (already mounted into `/wp-content/plugins`), and configure WooCommerce as usual.
+
+### Services
+
+- **nginx** – serves WordPress over HTTP and proxies PHP requests to the FPM container.
+- **wordpress** – official `wordpress:php8.2-fpm` image with the plugin folder bind-mounted for hot reloading.
+- **mysql** – MySQL 8.0 database with persistent named volume storage.
+
+### Hot reloading workflow
+
+- All files under `tapsilat-woocommerce/` are bind-mounted into the container, so editing PHP/JS/CSS locally is instantly reflected inside WordPress.
+- For JS/CSS builds, continue to use the existing npm build/watch scripts; the generated assets are sync'd automatically.
+
+### Useful commands
+
+- View logs: `docker compose logs -f wordpress` (or `nginx`, `mysql`).
+- Stop the stack: `docker compose down`.
+- Reset everything (DB + WordPress files): `docker compose down -v`.
+
 ## Screenshots
 
 1. **WordPress Plugin Management Page** - ![Plugin List](screenshots/1.png)  

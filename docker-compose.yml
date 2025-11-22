@@ -1,0 +1,63 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tapsilat-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-wordpress}
+      MYSQL_USER: ${MYSQL_USER:-wpuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-wppassword}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  wordpress:
+    image: wordpress:6.8.3-php8.2-fpm
+    container_name: tapsilat-wordpress
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME:-wordpress}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:-wpuser}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wppassword}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX:-wp_}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG', true);
+        define('WP_DEBUG_DISPLAY', true);
+        define('SCRIPT_DEBUG', true);
+        define('FS_METHOD', 'direct');
+        if (!defined('WP_HOME')) {
+            define('WP_HOME', 'http://localhost:8080');
+        }
+        if (!defined('WP_SITEURL')) {
+            define('WP_SITEURL', 'http://localhost:8080');
+        }
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./tapsilat-woocommerce:/var/www/html/wp-content/plugins/tapsilat-woocommerce:delegated
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tapsilat-nginx
+    restart: unless-stopped
+    depends_on:
+      - wordpress
+    ports:
+      - "8080:80"
+    volumes:
+      - wordpress_data:/var/www/html:ro
+      - ./tapsilat-woocommerce:/var/www/html/wp-content/plugins/tapsilat-woocommerce:ro,delegated
+      - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  mysql_data:
+  wordpress_data:
