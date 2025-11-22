@@ -117,6 +117,15 @@ Spin up a full WordPress + WooCommerce stack with Docker for rapid plugin develo
 - View logs: `docker compose logs -f wordpress` (or `nginx`, `mysql`).
 - Stop the stack: `docker compose down`.
 - Reset everything (DB + WordPress files): `docker compose down -v`.
+- The Composer helper service lives under the `tools` profile so it won't start automatically during `docker compose up`. Prefix commands with `docker compose --profile tools ...` when you need PHP dependencies installed inside the containerized environment.
+- Install PHP dependencies with Dockerized Composer:
+   ```bash
+   docker compose --profile tools run --rm composer install
+   ```
+- Update dependencies:
+   ```bash
+   docker compose --profile tools run --rm composer update vendor/package
+   ```
 
 ## Screenshots
 

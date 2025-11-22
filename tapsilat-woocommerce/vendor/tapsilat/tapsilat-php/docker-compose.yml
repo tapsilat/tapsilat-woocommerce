@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  tapsilat-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tapsilat-php-dev
+    volumes:
+      - .:/var/www/html
+      - ./vendor:/var/www/html/vendor
+    working_dir: /var/www/html
+    environment:
+      - PHP_IDE_CONFIG=serverName=tapsilat-php
+    ports:
+      - "8000:8000"
+    command: tail -f /dev/null
+    networks:
+      - tapsilat-network
+
+  tapsilat-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tapsilat-php-test
+    volumes:
+      - .:/var/www/html
+    working_dir: /var/www/html
+    command: composer test
+    networks:
+      - tapsilat-network
+
+networks:
+  tapsilat-network:
+    driver: bridge 

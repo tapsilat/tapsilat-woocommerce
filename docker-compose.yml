@@ -58,6 +58,17 @@ services:
       - ./tapsilat-woocommerce:/var/www/html/wp-content/plugins/tapsilat-woocommerce:ro,delegated
       - ./.docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
+  composer:
+    image: composer:2
+    container_name: tapsilat-composer
+    working_dir: /app
+    volumes:
+      - ./tapsilat-woocommerce:/app
+      - composer_cache:/tmp/composer
+    entrypoint: ["composer"]
+    profiles: ["tools"]
+
 volumes:
   mysql_data:
   wordpress_data:
+  composer_cache:

@@ -1,0 +1,244 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  # CI Job - runs only on tag releases
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3']
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite
+          coverage: none
+          
+      - name: Validate composer.json
+        run: composer validate --strict
+        
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-${{ matrix.php }}-
+            ${{ runner.os }}-php-
+            
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+        
+      - name: Run tests
+        run: composer test
+        
+      - name: Check code style
+        run: composer exec -- phpcs --standard=PSR12 src/ tests/
+        continue-on-error: true
+
+  # Release and Publish Job - runs on tag releases
+  release-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite
+          coverage: none
+          
+      - name: Validate composer.json
+        run: composer validate --strict
+        
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+            
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+        
+      - name: Run tests
+        run: composer test
+        
+      - name: Check if Release Exists
+        id: check_release
+        run: |
+          RELEASE_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.github.com/repos/tapsilat/tapsilat-php/releases/tags/${{ github.ref_name }}")
+          echo "exists=$RELEASE_EXISTS" >> $GITHUB_OUTPUT
+          
+      - name: Create Release
+        id: create_release
+        if: steps.check_release.outputs.exists != '200'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          
+      - name: Skip Release Creation
+        if: steps.check_release.outputs.exists == '200'
+        run: |
+          echo "Release for tag ${{ github.ref_name }} already exists, skipping creation"
+          
+      - name: Build package
+        run: composer install --no-dev --optimize-autoloader
+        
+      - name: Upload Release Assets
+        if: steps.check_release.outputs.exists != '200'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./vendor/
+          asset_name: vendor.zip
+          asset_content_type: application/zip
+          
+      - name: Publish to Packagist
+        run: |
+          echo "Publishing package to Packagist..."
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"repository":{"url":"https://github.com/tapsilat/tapsilat-php"}}' \
+            "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_TOKEN }}")
+          
+          HTTP_STATUS="${RESPONSE: -3}"
+          RESPONSE_BODY="${RESPONSE%???}"
+          
+          echo "Packagist API Response: $RESPONSE_BODY"
+          echo "HTTP Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 202 ]; then
+            echo "✅ Successfully triggered Packagist update"
+          else
+            echo "❌ Failed to trigger Packagist update (HTTP Status: $HTTP_STATUS)"
+            echo "Response: $RESPONSE_BODY"
+            exit 1
+          fi
+        
+      - name: Verify package on Packagist
+        run: |
+          echo "Waiting for Packagist to process the package..."
+          sleep 30
+          
+          # Check if package is available on Packagist
+          PACKAGE_URL="https://packagist.org/packages/tapsilat/tapsilat-php"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PACKAGE_URL")
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Package successfully published to Packagist!"
+            echo "Package URL: $PACKAGE_URL"
+          else
+            echo "❌ Package not found on Packagist (HTTP Status: $HTTP_STATUS)"
+            exit 1
+          fi
+          
+      - name: Release Summary
+        run: |
+          if [ "${{ steps.check_release.outputs.exists }}" = "200" ]; then
+            echo "🚀 Release already exists for tag ${{ github.ref_name }}"
+          else
+            echo "🚀 Release created successfully!"
+          fi
+          
+          if [ "${{ secrets.PACKAGIST_TOKEN }}" != "" ]; then
+            echo "📦 Package published to Packagist"
+            echo "🔗 Packagist URL: https://packagist.org/packages/tapsilat/tapsilat-php"
+          else
+            echo "⚠️ Packagist publishing skipped (token not configured)"
+          fi
+
+  # Packagist Webhook Job - runs on tag releases
+  packagist-webhook:
+    runs-on: ubuntu-latest
+
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite
+          coverage: none
+          
+      - name: Validate composer.json
+        run: composer validate --strict
+        
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+            
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+        
+      - name: Run tests
+        run: composer test
+        
+      - name: Notify Packagist
+        run: |
+          echo "Notifying Packagist of repository update..."
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"repository":{"url":"https://github.com/tapsilat/tapsilat-php"}}' \
+            "https://packagist.org/api/update-package?username=${{ secrets.PACKAGIST_USERNAME }}&apiToken=${{ secrets.PACKAGIST_TOKEN }}")
+          
+          HTTP_STATUS="${RESPONSE: -3}"
+          RESPONSE_BODY="${RESPONSE%???}"
+          
+          echo "Packagist API Response: $RESPONSE_BODY"
+          echo "HTTP Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 202 ]; then
+            echo "✅ Successfully notified Packagist of repository update"
+          else
+            echo "❌ Failed to notify Packagist (HTTP Status: $HTTP_STATUS)"
+            echo "Response: $RESPONSE_BODY"
+            # Don't fail the workflow for webhook notifications
+            echo "⚠️ Continuing workflow execution..."
+          fi
+        
+      - name: Webhook Summary
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "🔄 Repository updated on main branch"
+          else
+            echo "🔄 Pull request merged to main branch"
+          fi
+          
+          if [ "${{ secrets.PACKAGIST_TOKEN }}" != "" ]; then
+            echo "📦 Packagist notified of repository update"
+            echo "🔗 Packagist URL: https://packagist.org/packages/tapsilat/tapsilat-php"
+          else
+            echo "⚠️ Packagist notification skipped (token not configured)"
+          fi 
