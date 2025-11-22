@@ -118,6 +118,15 @@ Spin up a full WordPress + WooCommerce stack with Docker for rapid plugin develo
 - Stop the stack: `docker compose down`.
 - Reset everything (DB + WordPress files): `docker compose down -v`.
 - The Composer helper service lives under the `tools` profile so it won't start automatically during `docker compose up`. Prefix commands with `docker compose --profile tools ...` when you need PHP dependencies installed inside the containerized environment.
+
+## Release Automation
+
+A GitHub Actions workflow (`.github/workflows/release-plugin.yml`) packages only the `tapsilat-woocommerce` directory and attaches the resulting ZIP to releases.
+
+- **Automatic trigger:** publishing a GitHub Release kicks off the workflow, runs `composer install --no-dev`, and uploads `tapsilat-woocommerce.zip` to the release assets.
+- **Manual trigger:** run the workflow manually via *Actions → Release Plugin → Run workflow*; optionally provide a tag to package a specific ref. The ZIP is uploaded as a workflow artifact when no release context is available.
+
+The archive is ready to upload to WordPress.org or distribute directly, containing only the plugin files plus optimized Composer dependencies.
 - Install PHP dependencies with Dockerized Composer:
    ```bash
    docker compose --profile tools run --rm composer install

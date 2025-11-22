@@ -1,0 +1,63 @@
+name: Release Plugin
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name to package (only required for manual runs)"
+        required: false
+
+jobs:
+  package:
+    name: Build and package plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine ref for packaging
+        id: ref
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.tag_name }}" ]]; then
+            git fetch --tags origin "${{ inputs.tag_name }}"
+            git checkout "${{ inputs.tag_name }}"
+            echo "ref=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer
+
+      - name: Install Composer dependencies
+        working-directory: tapsilat-woocommerce
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Package plugin (tapsilat-woocommerce only)
+        run: |
+          zip -r tapsilat-woocommerce.zip tapsilat-woocommerce \
+            -x '*.git*' '*/.github/*' '*/node_modules/*'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tapsilat-woocommerce
+          path: tapsilat-woocommerce.zip
+          if-no-files-found: error
+
+      - name: Attach asset to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: tapsilat-woocommerce.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
