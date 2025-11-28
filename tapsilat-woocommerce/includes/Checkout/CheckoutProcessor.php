@@ -16,7 +16,7 @@ class CheckoutProcessor
     public function __construct()
     {
         $this->settings = get_option('woocommerce_tapsilat_settings', []);
-        
+
         if (!empty($this->settings['Token'])) {
             // Determine API URL based on settings
             $apiUrl = $this->getApiUrl();
@@ -37,20 +37,20 @@ class CheckoutProcessor
         if (defined('WP_DEBUG') && WP_DEBUG && function_exists('wc_get_logger')) {
             // Sanitize the message to prevent log injection
             $safe_message = sanitize_text_field($message);
-            
+
             // Use WooCommerce logger
             $logger = wc_get_logger();
             $logger->info('Tapsilat: ' . $safe_message, array('source' => 'tapsilat-woocommerce'));
         }
     }    /**
-     * Get API URL based on settings
-     *
-     * @return string
-     */
+         * Get API URL based on settings
+         *
+         * @return string
+         */
     private function getApiUrl()
     {
         $apiEnvironment = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-        
+
         if ($apiEnvironment === 'custom') {
             // Use custom API URL if provided, otherwise fallback to dev environment
             if (!empty($this->settings['custom_api_url'])) {
@@ -65,7 +65,7 @@ class CheckoutProcessor
                 return 'https://panel.tapsilat.dev/api/v1/';
             }
         }
-        
+
         // Production environment
         return 'https://panel.tapsilat.com/api/v1/';
     }
@@ -73,6 +73,7 @@ class CheckoutProcessor
     /**
      * Get or create order using Tapsilat SDK
      * First checks if order with conversation_id exists, if not creates new one
+     * Handles both regular orders and subscription orders
      *
      * @param WC_Order $order
      * @return array|false
@@ -84,18 +85,27 @@ class CheckoutProcessor
         }
 
         try {
+            // Check if this order contains subscription products
+            $isSubscription = $this->isSubscriptionOrder($order);
+
+            if ($isSubscription) {
+                $this->debug_log('Order contains subscription products, creating subscription');
+                return $this->createSubscriptionOrder($order);
+            }
+
+            // Regular order flow
             // First check if we already have an order with this conversation_id
             $conversationId = $order->get_id();
             $existingOrder = $this->getOrderByConversationId($conversationId);
-            
+
             if ($existingOrder) {
                 $this->debug_log('Found existing order for conversation_id: ' . $conversationId);
                 return $existingOrder;
             }
-            
+
             $this->debug_log('Creating new order for conversation_id: ' . $conversationId);
             $orderData = $order->get_data();
-            
+
             // Create buyer DTO
             $buyer = new BuyerDTO(
                 $orderData['billing']['first_name'],
@@ -149,22 +159,22 @@ class CheckoutProcessor
 
             // Create order via API
             $response = $this->tapsilatAPI->createOrder($orderCreateDTO);
-            
+
             $this->debug_log('API Response received - Type: ' . gettype($response));
             if (is_object($response)) {
                 $this->debug_log('Response class: ' . get_class($response));
             }
-            
+
             if ($response && method_exists($response, 'getReferenceId') && $response->getReferenceId()) {
                 $this->debug_log('Order created successfully - Reference ID: ' . $response->getReferenceId());
-                
+
                 // Store reference_id and metadata in order meta
                 $order->update_meta_data('_tapsilat_reference_id', $response->getReferenceId());
                 $order->update_meta_data('_tapsilat_order_id', $response->getOrderId());
                 $order->update_meta_data('_tapsilat_conversation_id', $order->get_id());
                 $order->update_meta_data('_tapsilat_metadata', $metadata);
                 $order->save();
-                
+
                 // Return array format for backward compatibility
                 return [
                     'reference_id' => $response->getReferenceId(),
@@ -178,6 +188,105 @@ class CheckoutProcessor
 
         } catch (\Exception $e) {
             $this->debug_log('Order Creation Error: ' . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if order contains subscription products
+     *
+     * @param WC_Order $order
+     * @return bool
+     */
+    private function isSubscriptionOrder(WC_Order $order)
+    {
+        // Check if subscriptions are enabled
+        if (!isset($this->settings['enable_subscriptions']) || $this->settings['enable_subscriptions'] !== 'yes') {
+            return false;
+        }
+
+        // Check order items for subscription products
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            if ($product) {
+                $isSubscription = get_post_meta($product->get_id(), '_is_tapsilat_subscription', true);
+                if ($isSubscription === 'yes') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Create subscription order using SubscriptionHelper
+     *
+     * @param WC_Order $order
+     * @return array|false
+     */
+    private function createSubscriptionOrder(WC_Order $order)
+    {
+        // Get subscription helper
+        $subscriptionHelper = new \Tapsilat\WooCommerce\Subscription\SubscriptionHelper();
+
+        // Get subscription data from first subscription product
+        $subscriptionData = $this->getSubscriptionDataFromOrder($order);
+
+        if (!$subscriptionData) {
+            $this->debug_log('Failed to get subscription data from order');
+            return false;
+        }
+
+        // Create subscription
+        $result = $subscriptionHelper->createSubscription($order, $subscriptionData);
+
+        if (is_wp_error($result)) {
+            $this->debug_log('Subscription creation failed: ' . $result->get_error_message());
+            return false;
+        }
+
+        if ($result && isset($result['success']) && $result['success']) {
+            $this->debug_log('Subscription created successfully - ID: ' . $result['subscription_id']);
+
+            // Get checkout URL for the subscription order
+            if (isset($result['order_reference_id'])) {
+                $checkoutUrl = $this->getCheckoutUrl($result['order_reference_id']);
+
+                return [
+                    'reference_id' => $result['order_reference_id'],
+                    'subscription_id' => $result['subscription_id'],
+                    'checkout_url' => $checkoutUrl,
+                    'is_subscription' => true
+                ];
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get subscription data from order items
+     *
+     * @param WC_Order $order
+     * @return array|false
+     */
+    private function getSubscriptionDataFromOrder(WC_Order $order)
+    {
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            if ($product) {
+                $isSubscription = get_post_meta($product->get_id(), '_is_tapsilat_subscription', true);
+
+                if ($isSubscription === 'yes') {
+                    return [
+                        'period' => get_post_meta($product->get_id(), '_tapsilat_subscription_period', true) ?: 30,
+                        'cycle' => get_post_meta($product->get_id(), '_tapsilat_subscription_cycle', true) ?: 12,
+                        'payment_date' => get_post_meta($product->get_id(), '_tapsilat_subscription_payment_date', true) ?: 1,
+                    ];
+                }
+            }
         }
 
         return false;
@@ -229,7 +338,7 @@ class CheckoutProcessor
             // Note: This might need to be implemented in the Tapsilat SDK
             if (method_exists($this->tapsilatAPI, 'getOrderByConversationId')) {
                 $response = $this->tapsilatAPI->getOrderByConversationId($conversationId);
-                
+
                 if ($response && method_exists($response, 'getReferenceId') && $response->getReferenceId()) {
                     $orderData = [
                         'reference_id' => $response->getReferenceId(),
@@ -237,10 +346,10 @@ class CheckoutProcessor
                         'checkout_url' => $response->getCheckoutUrl(),
                         'data' => $response->getData()
                     ];
-                    
+
                     // Cache for 30 minutes
                     set_transient('tapsilat_order_' . $conversationId, $orderData, 30 * MINUTE_IN_SECONDS);
-                    
+
                     return $orderData;
                 }
             }
@@ -294,6 +403,29 @@ class CheckoutProcessor
     }
 
     /**
+     * Refund order in Tapsilat
+     *
+     * @param string $referenceId
+     * @param float $amount
+     * @return bool
+     */
+    public function refundOrder($referenceId, $amount)
+    {
+        if (!$this->tapsilatAPI) {
+            return false;
+        }
+
+        try {
+            $refundDTO = new \Tapsilat\Models\RefundOrderDTO($amount, $referenceId);
+            $this->tapsilatAPI->refundOrder($refundDTO);
+            return true;
+        } catch (\Exception $e) {
+            $this->debug_log('Order Refund Error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Get country name
      *
      * @param string $countryCode
@@ -317,11 +449,11 @@ class CheckoutProcessor
     {
         $countries = new WC_Countries();
         $states = $countries->get_states($countryCode);
-        
+
         if (is_array($states) && isset($states[$stateCode])) {
             return $states[$stateCode];
         }
-        
+
         return $stateCode;
     }
 }

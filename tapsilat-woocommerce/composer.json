@@ -3,12 +3,12 @@
     "description": "WooCommerce Plugin for Tapsilat Payment Gateway",
     "type": "wordpress-plugin",
     "require": {
-        "php": ">=7.4",
-        "tapsilat/tapsilat-php": "^2025.07"
+        "php": ">=7.4"
     },
     "autoload": {
         "psr-4": {
-            "Tapsilat\\WooCommerce\\": "includes/"
+            "Tapsilat\\WooCommerce\\": "includes/",
+            "Tapsilat\\": "libs/tapsilat-php/"
         }
     },
     "config": {
