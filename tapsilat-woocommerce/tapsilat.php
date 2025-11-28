@@ -3,7 +3,7 @@
 Plugin Name: Tapsilat Payment Gateway for WooCommerce
 Plugin URI: https://github.com/tapsilat/tapsilat-woocommerce
 Description: Tapsilat payment gateway integration for WooCommerce
-Version: 2025.11.24.1
+Version: 2025.11.28.1
 Author: Tapsilat
 Author URI: https://tapsilat.com
 License: GPL v2 or later
