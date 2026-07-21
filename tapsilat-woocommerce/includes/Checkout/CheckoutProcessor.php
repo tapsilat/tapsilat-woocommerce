@@ -394,7 +394,7 @@ class CheckoutProcessor
         }
 
         try {
-            $this->tapsilatAPI->cancelOrder($referenceId);
+            $this->tapsilatAPI->cancelOrder(new \Tapsilat\Models\CancelOrderDTO($referenceId));
             return true;
         } catch (\Exception $e) {
             $this->debug_log('Order Cancel Error: ' . $e->getMessage());
@@ -455,5 +455,123 @@ class CheckoutProcessor
         }
 
         return $stateCode;
+    }
+
+    public function getOrder($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrder($referenceId); } catch (Exception $e) { $this->debug_log('getOrder error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderList($page = 1, $perPage = 10, $filters = []) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getList($page, $perPage, $filters); } catch (Exception $e) { $this->debug_log('getOrderList error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderSubmerchants($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrderSubmerchants($referenceId); } catch (Exception $e) { $this->debug_log('getOrderSubmerchants error: ' . $e->getMessage()); return false; }
+    }
+    public function refundAllOrder($referenceId, $reason = '') {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->refundAllOrder($referenceId, $reason); } catch (Exception $e) { $this->debug_log('refundAllOrder error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderPaymentDetails($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrderPaymentDetails($referenceId); } catch (Exception $e) { $this->debug_log('getOrderPaymentDetails error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderPaymentDetailsById($id) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrderPaymentDetailsById($id); } catch (Exception $e) { $this->debug_log('getOrderPaymentDetailsById error: ' . $e->getMessage()); return false; }
+    }
+    public function getTransactions($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getTransactions($referenceId); } catch (Exception $e) { $this->debug_log('getTransactions error: ' . $e->getMessage()); return false; }
+    }
+    public function orderAccounting($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->orderAccounting($referenceId); } catch (Exception $e) { $this->debug_log('orderAccounting error: ' . $e->getMessage()); return false; }
+    }
+    public function orderPostAuth($request) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->orderPostAuth($request); } catch (Exception $e) { $this->debug_log('orderPostAuth error: ' . $e->getMessage()); return false; }
+    }
+    public function terminateOrder($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->terminateOrder($referenceId); } catch (Exception $e) { $this->debug_log('terminateOrder error: ' . $e->getMessage()); return false; }
+    }
+    public function manualCallbackOrder($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->manualCallbackOrder($referenceId); } catch (Exception $e) { $this->debug_log('manualCallbackOrder error: ' . $e->getMessage()); return false; }
+    }
+    public function updateOrderRelated($referenceId, $relatedData) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->updateOrderRelated($referenceId, $relatedData); } catch (Exception $e) { $this->debug_log('updateOrderRelated error: ' . $e->getMessage()); return false; }
+    }
+    public function updatePaymentOptions($referenceId, $request) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->updatePaymentOptions($referenceId, $request); } catch (Exception $e) { $this->debug_log('updatePaymentOptions error: ' . $e->getMessage()); return false; }
+    }
+    public function splitOrderItemPayment($referenceId, $request) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->splitOrderItemPayment($referenceId, $request); } catch (Exception $e) { $this->debug_log('splitOrderItemPayment error: ' . $e->getMessage()); return false; }
+    }
+    public function queryVposOrder($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->queryVposOrder($referenceId); } catch (Exception $e) { $this->debug_log('queryVposOrder error: ' . $e->getMessage()); return false; }
+    }
+    public function createOrderTerm($referenceId, $termData) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->createOrderTerm($referenceId, $termData); } catch (Exception $e) { $this->debug_log('createOrderTerm error: ' . $e->getMessage()); return false; }
+    }
+    public function deleteOrderTerm($referenceId, $termId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->deleteOrderTerm($referenceId, $termId); } catch (Exception $e) { $this->debug_log('deleteOrderTerm error: ' . $e->getMessage()); return false; }
+    }
+    public function updateOrderTerm($referenceId, $termId, $termData) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->updateOrderTerm($referenceId, $termId, $termData); } catch (Exception $e) { $this->debug_log('updateOrderTerm error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderTerm($referenceId, $termId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrderTerm($referenceId, $termId); } catch (Exception $e) { $this->debug_log('getOrderTerm error: ' . $e->getMessage()); return false; }
+    }
+    public function refundOrderTerm($referenceId, $termId, $amount = null) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->refundOrderTerm($referenceId, $termId, $amount); } catch (Exception $e) { $this->debug_log('refundOrderTerm error: ' . $e->getMessage()); return false; }
+    }
+    public function addBasketItem($referenceId, $itemData) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->addBasketItem($referenceId, $itemData); } catch (Exception $e) { $this->debug_log('addBasketItem error: ' . $e->getMessage()); return false; }
+    }
+    public function removeBasketItem($referenceId, $itemId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->removeBasketItem($referenceId, $itemId); } catch (Exception $e) { $this->debug_log('removeBasketItem error: ' . $e->getMessage()); return false; }
+    }
+    public function updateBasketItem($referenceId, $itemId, $itemData) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->updateBasketItem($referenceId, $itemId, $itemData); } catch (Exception $e) { $this->debug_log('updateBasketItem error: ' . $e->getMessage()); return false; }
+    }
+    public function getOrderPayments($request) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->getOrderPayments($request); } catch (Exception $e) { $this->debug_log('getOrderPayments error: ' . $e->getMessage()); return false; }
+    }
+    public function downloadOrderPdf($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->downloadOrderPdf($referenceId); } catch (Exception $e) { $this->debug_log('downloadOrderPdf error: ' . $e->getMessage()); return false; }
+    }
+    public function downloadOrderExcel($referenceId) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->downloadOrderExcel($referenceId); } catch (Exception $e) { $this->debug_log('downloadOrderExcel error: ' . $e->getMessage()); return false; }
+    }
+    public function createRefundRequest($dto) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->createRefundRequest($dto); } catch (Exception $e) { $this->debug_log('createRefundRequest error: ' . $e->getMessage()); return false; }
+    }
+    public function addOIPToOrder($referenceId, $dto) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->addOIPToOrder($referenceId, $dto); } catch (Exception $e) { $this->debug_log('addOIPToOrder error: ' . $e->getMessage()); return false; }
+    }
+
+    public function orderCallback($id) {
+        if (!$this->tapsilatAPI) return false;
+        try { return $this->tapsilatAPI->orderCallback($id); } catch (Exception $e) { $this->debug_log('orderCallback error: ' . $e->getMessage()); return false; }
     }
 }
