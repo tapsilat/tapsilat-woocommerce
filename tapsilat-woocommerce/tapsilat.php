@@ -52,6 +52,9 @@ require_once plugin_dir_path(__FILE__) . 'includes/Api/WebhookController.php';
 require_once plugin_dir_path(__FILE__) . 'includes/Subscription/SubscriptionHelper.php';
 require_once plugin_dir_path(__FILE__) . 'includes/Subscription/RenewalProcessor.php';
 require_once plugin_dir_path(__FILE__) . 'includes/Subscription/ProductMeta.php';
+require_once plugin_dir_path(__FILE__) . 'includes/Organization/OrganizationHelper.php';
+require_once plugin_dir_path(__FILE__) . 'includes/System/SystemHelper.php';
+require_once plugin_dir_path(__FILE__) . 'includes/Submerchant/SubmerchantHelper.php';
 
 // Initialize the plugin after all plugins are loaded
 add_action("plugins_loaded", "tapsilat_init_gateway", 11);
