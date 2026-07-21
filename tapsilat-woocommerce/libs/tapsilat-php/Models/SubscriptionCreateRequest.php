@@ -18,57 +18,48 @@ class SubscriptionCreateRequest
 
     public function __construct(
         $amount = null,
-        $currency = null,
-        $title = null,
-        $period = null,
-        $cycle = null,
-        $payment_date = null,
-        $external_reference_id = null,
-        $success_url = null,
-        $failure_url = null,
+        ?SubscriptionBillingDTO $billing = null,
         $card_id = null,
-        $billing = null,
-        $user = null
+        $currency = null,
+        $cycle = null,
+        $external_reference_id = null,
+        $failure_url = null,
+        $payment_date = null,
+        $period = null,
+        $success_url = null,
+        $title = null,
+        ?SubscriptionUserDTO $user = null
     ) {
         $this->amount = $amount;
-        $this->currency = $currency;
-        $this->title = $title;
-        $this->period = $period;
-        $this->cycle = $cycle;
-        $this->payment_date = $payment_date;
-        $this->external_reference_id = $external_reference_id;
-        $this->success_url = $success_url;
-        $this->failure_url = $failure_url;
-        $this->card_id = $card_id;
         $this->billing = $billing;
+        $this->card_id = $card_id;
+        $this->currency = $currency;
+        $this->cycle = $cycle;
+        $this->external_reference_id = $external_reference_id;
+        $this->failure_url = $failure_url;
+        $this->payment_date = $payment_date;
+        $this->period = $period;
+        $this->success_url = $success_url;
+        $this->title = $title;
         $this->user = $user;
     }
 
     public function toArray()
     {
-        $data = array_filter([
-            'amount' => $this->amount,
-            'currency' => $this->currency,
-            'title' => $this->title,
-            'period' => $this->period,
-            'cycle' => $this->cycle,
-            'payment_date' => $this->payment_date,
-            'external_reference_id' => $this->external_reference_id,
-            'success_url' => $this->success_url,
-            'failure_url' => $this->failure_url,
-            'card_id' => $this->card_id,
-        ], function($value) {
-            return $value !== null;
-        });
-
-        if ($this->billing instanceof SubscriptionBillingDTO) {
-            $data['billing'] = $this->billing->toArray();
+        $result = [];
+        foreach (get_object_vars($this) as $key => $value) {
+            if ($value !== null) {
+                if (is_object($value) && method_exists($value, 'toArray')) {
+                    $result[$key] = $value->toArray();
+                } elseif (is_array($value)) {
+                    $result[$key] = array_map(function ($item) {
+                        return is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : $item;
+                    }, $value);
+                } else {
+                    $result[$key] = $value;
+                }
+            }
         }
-
-        if ($this->user instanceof SubscriptionUserDTO) {
-            $data['user'] = $this->user->toArray();
-        }
-
-        return $data;
+        return $result;
     }
 }

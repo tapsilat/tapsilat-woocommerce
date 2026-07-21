@@ -28,22 +28,23 @@ class Validators
 
     public static function validateGsmNumber($input)
     {
-        if ($input === '') {
-            return '';
+        if ($input === '' || $input === null) {
+            return $input;
         }
-        if ($input === null) {
-            return null;
-        }
+
+        // Clean common spacing symbols
         $cleaned = preg_replace('/[\s\-\(\)]/', '', $input);
-        if (preg_match('/^\+90\d{10}$/', $cleaned) || preg_match('/^0090\d{10}$/', $cleaned) || preg_match('/^0\d{10}$/', $cleaned) || preg_match('/^\d{10}$/', $cleaned)) {
-            return $cleaned;
-        }
-        if (preg_match('/^\+90\d{1,9}$/', $cleaned) || preg_match('/^0090\d{1,9}$/', $cleaned) || preg_match('/^0\d{1,9}$/', $cleaned) || preg_match('/^\d{1,9}$/', $cleaned)) {
-            throw new APIException(0, 0, 'Phone number too short');
-        }
-        if (!preg_match('/^[\d\+]+$/', $cleaned)) {
+
+        // Check if it's purely digits (allowing a leading '+')
+        if (!preg_match('/^\+?\d+$/', $cleaned)) {
             throw new APIException(0, 0, 'Invalid phone number format');
         }
-        throw new APIException(0, 0, 'Invalid phone number format');
+
+        // Basic universal length verification
+        if (strlen(str_replace('+', '', $cleaned)) < 5) {
+            throw new APIException(0, 0, 'Phone number is too short');
+        }
+
+        return $cleaned;
     }
 }

@@ -9,10 +9,10 @@ class CheckoutDesignDTO
     public $left_background_color;
     public $logo;
     public $order_detail_html;
-    public $pay_button_color;
-    public $redirect_url;
     public $right_background_color;
     public $text_color;
+    public $pay_button_color;
+    public $redirect_url;
 
     public function __construct(
         $input_background_color = null,
@@ -21,10 +21,10 @@ class CheckoutDesignDTO
         $left_background_color = null,
         $logo = null,
         $order_detail_html = null,
-        $pay_button_color = null,
-        $redirect_url = null,
         $right_background_color = null,
-        $text_color = null
+        $text_color = null,
+        $pay_button_color = null,
+        $redirect_url = null
     ) {
         $this->input_background_color = $input_background_color;
         $this->input_text_color = $input_text_color;
@@ -32,10 +32,10 @@ class CheckoutDesignDTO
         $this->left_background_color = $left_background_color;
         $this->logo = $logo;
         $this->order_detail_html = $order_detail_html;
-        $this->pay_button_color = $pay_button_color;
-        $this->redirect_url = $redirect_url;
         $this->right_background_color = $right_background_color;
         $this->text_color = $text_color;
+        $this->pay_button_color = $pay_button_color;
+        $this->redirect_url = $redirect_url;
     }
 
     public function toArray()
@@ -43,7 +43,15 @@ class CheckoutDesignDTO
         $result = [];
         foreach (get_object_vars($this) as $key => $value) {
             if ($value !== null) {
-                $result[$key] = $value;
+                if (is_object($value) && method_exists($value, 'toArray')) {
+                    $result[$key] = $value->toArray();
+                } elseif (is_array($value)) {
+                    $result[$key] = array_map(function ($item) {
+                        return is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : $item;
+                    }, $value);
+                } else {
+                    $result[$key] = $value;
+                }
             }
         }
         return $result;
