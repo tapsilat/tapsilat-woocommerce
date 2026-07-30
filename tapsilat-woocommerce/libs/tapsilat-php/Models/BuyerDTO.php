@@ -14,10 +14,13 @@ class BuyerDTO
     public $identity_number;
     public $ip;
     public $last_login_date;
-    public $registration_address;
     public $registration_date;
     public $title;
     public $zip_code;
+    public $registration_address;
+    public $income_type;
+    public $education;
+    public $occupation;
 
     public function __construct(
         $name,
@@ -31,10 +34,13 @@ class BuyerDTO
         $identity_number = null,
         $ip = null,
         $last_login_date = null,
-        $registration_address = null,
         $registration_date = null,
         $title = null,
-        $zip_code = null
+        $zip_code = null,
+        $registration_address = null,
+        $income_type = null,
+        $education = null,
+        $occupation = null
     ) {
         $this->name = $name;
         $this->surname = $surname;
@@ -47,10 +53,13 @@ class BuyerDTO
         $this->identity_number = $identity_number;
         $this->ip = $ip;
         $this->last_login_date = $last_login_date;
-        $this->registration_address = $registration_address;
         $this->registration_date = $registration_date;
         $this->title = $title;
         $this->zip_code = $zip_code;
+        $this->registration_address = $registration_address;
+        $this->income_type = $income_type;
+        $this->education = $education;
+        $this->occupation = $occupation;
     }
 
     public function toArray()
@@ -58,7 +67,15 @@ class BuyerDTO
         $result = [];
         foreach (get_object_vars($this) as $key => $value) {
             if ($value !== null) {
-                $result[$key] = $value;
+                if (is_object($value) && method_exists($value, 'toArray')) {
+                    $result[$key] = $value->toArray();
+                } elseif (is_array($value)) {
+                    $result[$key] = array_map(function ($item) {
+                        return is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : $item;
+                    }, $value);
+                } else {
+                    $result[$key] = $value;
+                }
             }
         }
         return $result;

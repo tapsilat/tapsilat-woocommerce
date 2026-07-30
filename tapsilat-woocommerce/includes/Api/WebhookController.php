@@ -297,4 +297,12 @@ class WebhookController extends WP_REST_Controller
     {
         return $order->get_cancel_order_url();
     }
+
+    public function verifyWebhookSignature($signature, $payload) {
+        // We need to instantiate TapsilatAPI or use a helper
+        $settings = get_option('woocommerce_tapsilat_settings');
+        $token = isset($settings['Token']) ? $settings['Token'] : '';
+        $api = new \Tapsilat\TapsilatAPI($token, 10);
+        return $api->verifyWebhookSignature($signature, $payload);
+    }
 }

@@ -40,19 +40,20 @@ class SubscriptionUserDTO
 
     public function toArray()
     {
-        return array_filter([
-            'id' => $this->id,
-            'first_name' => $this->first_name,
-            'last_name' => $this->last_name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'identity_number' => $this->identity_number,
-            'address' => $this->address,
-            'city' => $this->city,
-            'country' => $this->country,
-            'zip_code' => $this->zip_code,
-        ], function($value) {
-            return $value !== null;
-        });
+        $result = [];
+        foreach (get_object_vars($this) as $key => $value) {
+            if ($value !== null) {
+                if (is_object($value) && method_exists($value, 'toArray')) {
+                    $result[$key] = $value->toArray();
+                } elseif (is_array($value)) {
+                    $result[$key] = array_map(function ($item) {
+                        return is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : $item;
+                    }, $value);
+                } else {
+                    $result[$key] = $value;
+                }
+            }
+        }
+        return $result;
     }
 }

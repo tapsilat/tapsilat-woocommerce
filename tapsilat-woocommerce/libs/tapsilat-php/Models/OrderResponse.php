@@ -1,13 +1,18 @@
 <?php
 namespace Tapsilat\Models;
 
-class OrderResponse
+class OrderResponse implements \JsonSerializable
 {
     private $data;
 
     public function __construct($data)
     {
         $this->data = is_array($data) ? $data : [];
+    }
+
+    public function jsonSerialize(): mixed
+    {
+        return $this->data;
     }
 
     public function getReferenceId()
@@ -26,6 +31,11 @@ class OrderResponse
     }
 
     public function getData()
+    {
+        return $this->data;
+    }
+
+    public function toArray()
     {
         return $this->data;
     }

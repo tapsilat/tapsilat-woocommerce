@@ -20,7 +20,8 @@ Modern payment gateway plugin for WooCommerce that integrates with Tapsilat paym
 - Advanced order status monitoring and automatic updates
 - Custom logo support for payment method
 - Flexible API environment configuration (Production/Custom)
-
+- Full support for all Tapsilat API endpoints (Organization, System, Submerchant, Subscriptions) via integrated helper classes
+- Advanced Checkout capabilities including partial/full refunds, manual callbacks, split payments and OIP
 ## Installation
 
 1. Upload the plugin files to `/wp-content/plugins/tapsilat-woocommerce` directory

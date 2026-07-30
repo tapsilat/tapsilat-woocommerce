@@ -1,13 +1,18 @@
 <?php
 namespace Tapsilat\Models;
 
-class SubscriptionCreateResponse
+class SubscriptionCreateResponse implements \JsonSerializable
 {
     private $data;
 
     public function __construct($data)
     {
         $this->data = $data;
+    }
+
+    public function jsonSerialize(): mixed
+    {
+        return $this->data;
     }
 
     public function getReferenceId()
