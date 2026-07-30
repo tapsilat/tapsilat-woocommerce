@@ -106,18 +106,18 @@ class SubscriptionHelper
 
             // Prepare subscription request
             $subscription = new SubscriptionCreateRequest(
-                'Subscription for Order #' . $order->get_id(), // title
                 $order->get_total(), // amount
-                $period,
-                $payment_date,
+                $billing, // billing
+                isset($subscription_data['card_id']) ? $subscription_data['card_id'] : null, // card_id
                 $order->get_currency(), // currency
                 $cycle,
                 'wc_order_' . $order->get_id(), // external_reference_id
-                $order->get_checkout_order_received_url(), // success_url
                 $order->get_cancel_order_url(), // failure_url
-                isset($subscription_data['card_id']) ? $subscription_data['card_id'] : null, // card_id
-                $user, // user
-                $billing // billing
+                $payment_date,
+                $period,
+                $order->get_checkout_order_received_url(), // success_url
+                'Subscription for Order #' . $order->get_id(), // title
+                $user // user
             );
 
             // Create subscription via API
