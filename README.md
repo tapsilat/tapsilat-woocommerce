@@ -51,29 +51,32 @@ Modern payment gateway plugin for WooCommerce that integrates with Tapsilat paym
 
 You can get API Key from [Tapsilat](https://panel.tapsilat.com) website.
 
-### Webhook URLs
+### Payment Callbacks
 
-Configure these URLs in your Tapsilat merchant panel:
+Every order the plugin creates tells Tapsilat where to post its payment callbacks and where the checkout's "return to store" links lead, so no URL setup is needed:
 
-- Success URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-success`
-- Failure URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-failure`
-- Callback URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback`
+- Callbacks: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback?order_id=…&key=…`
+- Customer return: `https://yoursite.com/?wc-api=tapsilat_return&order_id=…&key=…`
+
+To also receive your organization's callbacks, enter `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback` as the callback, fail, cancel and refund callback URLs in the callback settings of your Tapsilat panel. Copy the **Webhook Secret** from the same page into the plugin settings: callbacks whose `Tapsilat-Signature` header does not match it are rejected.
+
+The plugin never trusts the status a callback or a returning browser carries. Each of them only makes the plugin ask the Tapsilat API for the order's status. The older `payment-success` and `payment-failure` URLs still work the same way.
 
 ## Automatic Order Status Updates
 
-The plugin includes an intelligent cron job system that automatically monitors and updates order statuses:
+The plugin includes a cron job that checks the payment status of recent Tapsilat orders that are still pending, on hold, failed or cancelled:
 
 - **Configurable Intervals**: Set automatic checks every 5, 10, 15, or 30 minutes
-- **Smart Processing**: Only checks orders that need status updates to optimize performance
+- **Smart Processing**: Only checks orders created in the last 7 days that may still change
 - **Recent Order Skip**: Avoids checking recently modified orders to prevent conflicts
 
 ### Supported Status Mappings
 
 | Tapsilat Status | WooCommerce Status | Action |
 |----------------|-------------------|---------|
-| SUCCESS/COMPLETED | Processing | Payment completed, order processed |
-| FAILED/CANCELLED/EXPIRED | Failed | Order marked as failed |
-| PENDING/WAITING | On Hold | Order waiting for payment |
+| Paid, Completed, Sub merchant payment approved | Processing (or Completed for virtual orders) | Payment completed |
+| Failure, Cancelled, Expired, Rejected, Fraud, Terminated | Failed | Pending or on-hold order marked as failed; the customer can pay again |
+| Waiting for payment and other statuses | Unchanged | Checked again later |
 
 ## Requirements
 

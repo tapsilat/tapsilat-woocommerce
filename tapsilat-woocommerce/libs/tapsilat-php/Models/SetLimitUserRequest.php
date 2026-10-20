@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class SetLimitUserRequest
@@ -8,7 +9,8 @@ class SetLimitUserRequest
 
     public function __construct(
         $limit_id,
-        $user_id) {
+        $user_id
+    ) {
         $this->limit_id = $limit_id;
         $this->user_id = $user_id;
     }

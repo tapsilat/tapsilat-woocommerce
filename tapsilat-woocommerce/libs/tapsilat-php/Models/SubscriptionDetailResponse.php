@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class SubscriptionDetailResponse implements \JsonSerializable
@@ -10,7 +11,8 @@ class SubscriptionDetailResponse implements \JsonSerializable
         $this->data = $data;
     }
 
-    public function jsonSerialize(): mixed
+    #[\ReturnTypeWillChange]
+    public function jsonSerialize()
     {
         return $this->data;
     }

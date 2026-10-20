@@ -18,23 +18,7 @@ class SystemHelper
 
     private function init_api_client()
     {
-        $token = isset($this->settings['Token']) ? $this->settings['Token'] : '';
-        $apiUrl = $this->getApiUrl();
-        $this->tapsilatAPI = new TapsilatAPI($token, 10, $apiUrl);
-    }
-
-    private function getApiUrl()
-    {
-        $apiEnvironment = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-        if ($apiEnvironment === 'custom') {
-            if (!empty($this->settings['custom_api_url'])) {
-                $customUrl = rtrim($this->settings['custom_api_url'], '/');
-                $customUrl = preg_replace('/\/api\/v1$/', '', $customUrl);
-                return $customUrl . '/api/v1/';
-            }
-            return 'https://panel.tapsilat.dev/api/v1/';
-        }
-        return 'https://panel.tapsilat.com/api/v1/';
+        $this->tapsilatAPI = \Tapsilat\WooCommerce\ApiClient::make(is_array($this->settings) ? $this->settings : []);
     }
 
     private function debug_log($message)
@@ -49,7 +33,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getOrderStatuses();
+            return $this->tapsilatAPI->getSystemOrderStatuses();
         } catch (Exception $e) {
             $this->debug_log('Get order statuses error: ' . $e->getMessage());
             return false;
@@ -60,7 +44,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getBasketItemTypes();
+            return $this->tapsilatAPI->getSystemBasketItemTypes();
         } catch (Exception $e) {
             $this->debug_log('Get basket item types error: ' . $e->getMessage());
             return false;
@@ -71,7 +55,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getErrorCodes();
+            return $this->tapsilatAPI->getSystemErrorCodes();
         } catch (Exception $e) {
             $this->debug_log('Get error codes error: ' . $e->getMessage());
             return false;
@@ -82,7 +66,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getPaymentTermStatuses();
+            return $this->tapsilatAPI->getSystemPaymentTermStatuses();
         } catch (Exception $e) {
             $this->debug_log('Get payment term statuses error: ' . $e->getMessage());
             return false;
@@ -93,7 +77,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getProductTypes();
+            return $this->tapsilatAPI->getSystemProductTypes();
         } catch (Exception $e) {
             $this->debug_log('Get product types error: ' . $e->getMessage());
             return false;
@@ -104,7 +88,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getShortcutTypes();
+            return $this->tapsilatAPI->getSystemShortcutTypes();
         } catch (Exception $e) {
             $this->debug_log('Get shortcut types error: ' . $e->getMessage());
             return false;
@@ -115,7 +99,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getTransactionPaymentTypes();
+            return $this->tapsilatAPI->getSystemTransactionPaymentTypes();
         } catch (Exception $e) {
             $this->debug_log('Get transaction payment types error: ' . $e->getMessage());
             return false;
@@ -126,7 +110,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getTransactionPurposes();
+            return $this->tapsilatAPI->getSystemTransactionPurposes();
         } catch (Exception $e) {
             $this->debug_log('Get transaction purposes error: ' . $e->getMessage());
             return false;
@@ -137,7 +121,7 @@ class SystemHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getTransactionStatuses();
+            return $this->tapsilatAPI->getSystemTransactionStatuses();
         } catch (Exception $e) {
             $this->debug_log('Get transaction statuses error: ' . $e->getMessage());
             return false;

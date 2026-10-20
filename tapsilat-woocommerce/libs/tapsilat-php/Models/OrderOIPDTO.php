@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrderOIPDTO
@@ -11,8 +12,15 @@ class OrderOIPDTO
     public $order_id;
     public $order_item_id;
 
-    public function __construct($amount, $type, $basket_item_id = null, $order_id = null, $order_item_id = null, $paid_date = null, $wallet_id = null)
-    {
+    public function __construct(
+        $amount,
+        $type,
+        $basket_item_id = null,
+        $order_id = null,
+        $order_item_id = null,
+        $paid_date = null,
+        $wallet_id = null
+    ) {
         $this->paid_date = $paid_date;
         $this->wallet_id = $wallet_id;
         $this->amount = $amount;

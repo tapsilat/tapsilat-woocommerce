@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrderPaymentTermDeleteRequest
@@ -8,7 +9,8 @@ class OrderPaymentTermDeleteRequest
 
     public function __construct(
         $order_id,
-        $term_reference_id) {
+        $term_reference_id
+    ) {
         $this->order_id = $order_id;
         $this->term_reference_id = $term_reference_id;
     }

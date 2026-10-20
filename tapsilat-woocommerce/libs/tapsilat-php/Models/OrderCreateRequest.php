@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrderCreateRequest
@@ -32,6 +33,7 @@ class OrderCreateRequest
     public $submerchants;
     public $tax_amount;
     public $three_d_force;
+    public $order_vpos_id;
 
 
     public function __construct(
@@ -63,8 +65,10 @@ class OrderCreateRequest
         ?SubOrganizationDTO $sub_organization = null,
         ?array $submerchants = null,
         $tax_amount = null,
-        $three_d_force = null
+        $three_d_force = null,
+        $order_vpos_id = null
     ) {
+        $this->order_vpos_id = $order_vpos_id;
         $this->amount = $amount;
         $this->currency = $currency;
         $this->locale = $locale;

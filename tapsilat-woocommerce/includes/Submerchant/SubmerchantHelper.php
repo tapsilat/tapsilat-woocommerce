@@ -18,23 +18,7 @@ class SubmerchantHelper
 
     private function init_api_client()
     {
-        $token = isset($this->settings['Token']) ? $this->settings['Token'] : '';
-        $apiUrl = $this->getApiUrl();
-        $this->tapsilatAPI = new TapsilatAPI($token, 10, $apiUrl);
-    }
-
-    private function getApiUrl()
-    {
-        $apiEnvironment = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-        if ($apiEnvironment === 'custom') {
-            if (!empty($this->settings['custom_api_url'])) {
-                $customUrl = rtrim($this->settings['custom_api_url'], '/');
-                $customUrl = preg_replace('/\/api\/v1$/', '', $customUrl);
-                return $customUrl . '/api/v1/';
-            }
-            return 'https://panel.tapsilat.dev/api/v1/';
-        }
-        return 'https://panel.tapsilat.com/api/v1/';
+        $this->tapsilatAPI = \Tapsilat\WooCommerce\ApiClient::make(is_array($this->settings) ? $this->settings : []);
     }
 
     private function debug_log($message)
@@ -93,7 +77,7 @@ class SubmerchantHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getSubmerchantsList();
+            return $this->tapsilatAPI->listSubmerchants();
         } catch (Exception $e) {
             $this->debug_log('List submerchants error: ' . $e->getMessage());
             return false;

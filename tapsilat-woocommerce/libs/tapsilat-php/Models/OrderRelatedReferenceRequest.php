@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrderRelatedReferenceRequest
@@ -8,7 +9,8 @@ class OrderRelatedReferenceRequest
 
     public function __construct(
         $reference_id,
-        $related_reference_id) {
+        $related_reference_id
+    ) {
         $this->reference_id = $reference_id;
         $this->related_reference_id = $related_reference_id;
     }

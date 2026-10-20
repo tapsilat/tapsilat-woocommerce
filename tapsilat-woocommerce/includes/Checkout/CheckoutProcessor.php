@@ -2,31 +2,31 @@
 
 namespace Tapsilat\WooCommerce\Checkout;
 
+use Tapsilat\OrderStatus;
 use Tapsilat\TapsilatAPI;
+use Tapsilat\Models\BasketItemDTO;
 use Tapsilat\Models\BuyerDTO;
+use Tapsilat\Models\MetadataDTO;
 use Tapsilat\Models\OrderCreateDTO;
+use Tapsilat\WooCommerce\ApiClient;
 use WC_Order;
 use WC_Countries;
 
 class CheckoutProcessor
 {
+    /** @var TapsilatAPI|null */
     private $tapsilatAPI;
     private $settings;
 
     public function __construct()
     {
         $this->settings = get_option('woocommerce_tapsilat_settings', []);
-
-        if (!empty($this->settings['Token'])) {
-            // Determine API URL based on settings
-            $apiUrl = $this->getApiUrl();
-            $this->tapsilatAPI = new TapsilatAPI($this->settings['Token'], 10, $apiUrl);
-        }
+        $this->tapsilatAPI = ApiClient::make($this->settings);
     }
 
     /**
      * Log debug information if debug mode is enabled
-     * 
+     *
      * Security: Ensures no sensitive data is logged
      *
      * @param string $message The message to log (should not contain sensitive data)
@@ -42,38 +42,42 @@ class CheckoutProcessor
             $logger = wc_get_logger();
             $logger->info('Tapsilat: ' . $safe_message, array('source' => 'tapsilat-woocommerce'));
         }
-    }    /**
-         * Get API URL based on settings
-         *
-         * @return string
-         */
-    private function getApiUrl()
-    {
-        $apiEnvironment = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-
-        if ($apiEnvironment === 'custom') {
-            // Use custom API URL if provided, otherwise fallback to dev environment
-            if (!empty($this->settings['custom_api_url'])) {
-                $customUrl = rtrim($this->settings['custom_api_url'], '/');
-                // Remove /api/v1/accounting if already present to avoid duplication
-                $customUrl = preg_replace('/\/api\/v1\/accounting$/', '', $customUrl);
-                // Remove /api/v1 if already present to avoid duplication
-                $customUrl = preg_replace('/\/api\/v1$/', '', $customUrl);
-                return $customUrl . '/api/v1/';
-            } else {
-                // Default to dev environment when custom is selected but no URL provided
-                return 'https://panel.tapsilat.dev/api/v1/';
-            }
-        }
-
-        // Production environment
-        return 'https://panel.tapsilat.com/api/v1/';
     }
 
     /**
-     * Get or create order using Tapsilat SDK
-     * First checks if order with conversation_id exists, if not creates new one
-     * Handles both regular orders and subscription orders
+     * The URL Tapsilat posts signed payment callbacks for this order to.
+     *
+     * @param WC_Order $order
+     * @return string
+     */
+    public static function callbackUrl(WC_Order $order)
+    {
+        return add_query_arg(
+            ['order_id' => $order->get_id(), 'key' => $order->get_order_key()],
+            rest_url('tapsilat/v1/webhook/payment-callback')
+        );
+    }
+
+    /**
+     * The URL the Tapsilat checkout sends the customer back to after paying or giving up.
+     *
+     * @param WC_Order $order
+     * @return string
+     */
+    public static function returnUrl(WC_Order $order)
+    {
+        return add_query_arg(
+            ['order_id' => $order->get_id(), 'key' => $order->get_order_key()],
+            WC()->api_request_url('tapsilat_return')
+        );
+    }
+
+    /**
+     * Creates a Tapsilat order for the WooCommerce order, or a subscription when the order contains
+     * a Tapsilat subscription product, and stores its reference on the order.
+     *
+     * Every call is a new payment attempt with its own conversation ID, so it is also how a
+     * failed or expired attempt is retried.
      *
      * @param WC_Order $order
      * @return array|false
@@ -85,26 +89,16 @@ class CheckoutProcessor
         }
 
         try {
-            // Check if this order contains subscription products
-            $isSubscription = $this->isSubscriptionOrder($order);
-
-            if ($isSubscription) {
+            if ($this->isSubscriptionOrder($order)) {
                 $this->debug_log('Order contains subscription products, creating subscription');
                 return $this->createSubscriptionOrder($order);
             }
 
-            // Regular order flow
-            // First check if we already have an order with this conversation_id
-            $conversationId = $order->get_id();
-            $existingOrder = $this->getOrderByConversationId($conversationId);
-
-            if ($existingOrder) {
-                $this->debug_log('Found existing order for conversation_id: ' . $conversationId . '. Syncing basket items...');
-                $this->syncBasketItems($order, $existingOrder);
-                return $existingOrder;
-            }
-
-            $this->debug_log('Creating new order for conversation_id: ' . $conversationId);
+            // Conversation IDs are unique across Tapsilat, so a bare order number would collide
+            // with other stores and with earlier attempts for this order.
+            $conversationId = 'wc-' . $order->get_id() . '-' . strtolower(wp_generate_password(8, false));
+            $currency = $order->get_currency() ?: ($this->settings['Currency'] ?? 'TRY');
+            $amount = $this->formatAmount($order->get_total());
 
             // Create buyer DTO using WooCommerce 3.0+ getters (HPOS compatible)
             $buyer = new BuyerDTO(
@@ -114,80 +108,146 @@ class CheckoutProcessor
                 $this->getCityName($order->get_billing_country(), $order->get_billing_state()),
                 $this->getCountryName($order->get_billing_country()),
                 $order->get_billing_email(),
-                $order->get_billing_phone()
+                $this->cleanPhone($order->get_billing_phone())
             );
 
-            // Create order DTO
-            $orderCreateDTO = new OrderCreateDTO(
-                (float) $order->get_total(),
-                $this->settings['Currency'] ?? 'TRY',
-                substr(get_locale(), 0, 2),
-                $buyer
-            );
-            $orderCreateDTO->basket_items = $this->buildBasketItemsFromOrder($order);
+            $orderCreateDTO = new OrderCreateDTO($amount, $currency, substr(get_locale(), 0, 2), $buyer);
+            $orderCreateDTO->basket_items = $this->buildBasketItemsFromOrder($order, $amount);
+            $orderCreateDTO->conversation_id = $conversationId;
 
-            // Set conversation_id as WooCommerce order ID
-            $orderCreateDTO->conversation_id = $order->get_id();
-            $this->debug_log('Setting conversation_id to Order ID: ' . $order->get_id());
+            $metadata = $this->buildMetadata($order);
+            $orderCreateDTO->metadata = array_map(function ($key) use ($metadata) {
+                return new MetadataDTO((string) $key, $metadata[$key]);
+            }, array_keys($metadata));
 
-            // Add metadata with WooCommerce info and custom settings
-            $metadata = [
-                'woocommerce_order_id' => $order->get_id(),
-                'woocommerce_order_key' => $order->get_order_key(),
-                'payment_source' => 'woocommerce_api',
-                'plugin_version' => '2025.09.24.1',
-                'site_url' => get_site_url()
-            ];
+            // Tapsilat posts signed payment callbacks to the payment URLs, and the checkout's
+            // "return to store" links lead to the redirect URLs.
+            $orderCreateDTO->payment_success_url = self::callbackUrl($order);
+            $orderCreateDTO->payment_failure_url = self::callbackUrl($order);
+            $orderCreateDTO->redirect_success_url = self::returnUrl($order);
+            $orderCreateDTO->redirect_failure_url = self::returnUrl($order);
 
-            // Add custom metadata from settings if available
-            if (!empty($this->settings['custom_metadata'])) {
-                $customMetadata = json_decode($this->settings['custom_metadata'], true);
-                if (is_array($customMetadata)) {
-                    $metadata = array_merge($metadata, $customMetadata);
-                }
-            }
+            $this->debug_log('Creating Tapsilat order ' . $conversationId . ' - Amount: ' . $amount . ' ' . $currency);
 
-            $orderCreateDTO->metadata = $metadata;
-            $this->debug_log('Setting metadata: ' . json_encode($metadata));
-
-            // Log the API URL we're sending to
-            $this->debug_log('Sending order creation request to: ' . $this->getApiUrl());
-            $this->debug_log('Order data - Amount: ' . $order->get_total() . ', Currency: ' . ($this->settings['Currency'] ?? 'TRY') . ', Order ID: ' . $order->get_id());
-
-            // Create order via API
             $response = $this->tapsilatAPI->createOrder($orderCreateDTO);
-
-            $this->debug_log('API Response received - Type: ' . gettype($response));
-            if (is_object($response)) {
-                $this->debug_log('Response class: ' . get_class($response));
-            }
-
-            if ($response && method_exists($response, 'getReferenceId') && $response->getReferenceId()) {
-                $this->debug_log('Order created successfully - Reference ID: ' . $response->getReferenceId());
-
-                // Store reference_id and metadata in order meta
-                $order->update_meta_data('_tapsilat_reference_id', $response->getReferenceId());
-                $order->update_meta_data('_tapsilat_order_id', $response->getOrderId());
-                $order->update_meta_data('_tapsilat_conversation_id', $order->get_id());
-                $order->update_meta_data('_tapsilat_metadata', $metadata);
-                $order->save();
-
-                // Return array format for backward compatibility
-                return [
-                    'reference_id' => $response->getReferenceId(),
-                    'order_id' => $response->getOrderId(),
-                    'checkout_url' => $response->getCheckoutUrl(),
-                    'data' => $response->getData()
-                ];
-            } else {
+            if (!$response || !$response->getReferenceId()) {
                 $this->debug_log('Order creation failed - Invalid response or missing reference ID');
+                return false;
             }
 
+            $this->debug_log('Order created successfully - Reference ID: ' . $response->getReferenceId());
+
+            $order->update_meta_data('_tapsilat_reference_id', $response->getReferenceId());
+            // Every attempt's reference, so that a late payment of an earlier attempt is still found.
+            $order->add_meta_data('_tapsilat_attempt_reference_id', $response->getReferenceId());
+            $order->update_meta_data('_tapsilat_order_id', $response->getOrderId());
+            $order->update_meta_data('_tapsilat_conversation_id', $conversationId);
+            $order->update_meta_data('_tapsilat_amount', $amount);
+            $order->update_meta_data('_tapsilat_currency', $currency);
+            $order->update_meta_data('_tapsilat_metadata', $metadata);
+            $order->save();
+
+            return [
+                'reference_id' => $response->getReferenceId(),
+                'order_id' => $response->getOrderId(),
+                'checkout_url' => $response->getCheckoutUrl(),
+                'data' => $response->getData()
+            ];
         } catch (\Exception $e) {
             $this->debug_log('Order Creation Error: ' . $e->getMessage());
         }
 
         return false;
+    }
+
+    /**
+     * Whether the order's Tapsilat order still matches its total and currency, so that its
+     * checkout can be reused. Orders created before these were recorded are assumed to match.
+     *
+     * @param WC_Order $order
+     * @return bool
+     */
+    public function isCurrentAttempt(WC_Order $order)
+    {
+        $amount = $order->get_meta('_tapsilat_amount');
+        $currency = $order->get_meta('_tapsilat_currency');
+
+        if ($amount !== '' && $this->formatAmount($amount) !== $this->formatAmount($order->get_total())) {
+            return false;
+        }
+
+        return $currency === '' || $currency === $order->get_currency();
+    }
+
+    /**
+     * Looks up the status of the order's Tapsilat order and moves the WooCommerce order to match:
+     * a paid order is completed, and a pending one whose payment failed, was cancelled or expired
+     * is marked failed. Callbacks and return URLs only trigger this lookup; nothing they carry is
+     * trusted.
+     *
+     * @param WC_Order $order
+     * @param string $source Where the check came from, for the order note
+     * @param bool $markFailed Whether to mark a pending order failed when its payment failed
+     * @param string|null $referenceId One of the order's payment attempts; the current one by default
+     * @return string|null 'paid', 'failed', 'refunded' or 'pending', or null when the status is unknown
+     */
+    public function syncOrderStatus(WC_Order $order, $source, $markFailed = true, $referenceId = null)
+    {
+        $current = $order->get_meta('_tapsilat_reference_id');
+        $referenceId = $referenceId ?: $current;
+        if (!$referenceId) {
+            return null;
+        }
+        $isCurrent = $referenceId === $current;
+
+        $result = $this->getOrderStatus($referenceId);
+        if (!is_array($result) || !isset($result['status'])) {
+            return null;
+        }
+        $status = $result['status'];
+
+        if (OrderStatus::isPaid($status)) {
+            $payable = apply_filters(
+                'woocommerce_valid_order_statuses_for_payment_complete',
+                ['on-hold', 'pending', 'failed', 'cancelled'],
+                $order
+            );
+            if (in_array($order->get_status(), $payable, true)) {
+                if (!$isCurrent) {
+                    // An earlier attempt was paid; refunds must go to it.
+                    $order->update_meta_data('_tapsilat_reference_id', $referenceId);
+                    $order->save();
+                }
+                $order->add_order_note(sprintf(
+                    /* translators: 1: Tapsilat reference ID, 2: where the payment was confirmed */
+                    __('Tapsilat payment confirmed. Reference ID: %1$s (%2$s)', 'tapsilat-woocommerce'),
+                    $referenceId,
+                    $source
+                ));
+                $order->payment_complete($referenceId);
+            }
+            return 'paid';
+        }
+
+        if (OrderStatus::isFailed($status)) {
+            // A failed earlier attempt says nothing about the current one.
+            if ($markFailed && $isCurrent && in_array($order->get_status(), ['pending', 'on-hold'], true)) {
+                $order->update_status('failed', sprintf(
+                    /* translators: 1: Tapsilat order status, 2: Tapsilat reference ID, 3: where the status was checked */
+                    __('Tapsilat payment status: %1$s. Reference ID: %2$s (%3$s)', 'tapsilat-woocommerce'),
+                    OrderStatus::name($status) ?: $status,
+                    $referenceId,
+                    $source
+                ));
+            }
+            return 'failed';
+        }
+
+        if (OrderStatus::isRefunded($status)) {
+            return 'refunded';
+        }
+
+        return 'pending';
     }
 
     /**
@@ -237,7 +297,7 @@ class CheckoutProcessor
         }
 
         // Create subscription
-        $result = $subscriptionHelper->createSubscription($order, $subscriptionData);
+        $result = $subscriptionHelper->create_subscription($order, $subscriptionData);
 
         if (is_wp_error($result)) {
             $this->debug_log('Subscription creation failed: ' . $result->get_error_message());
@@ -248,7 +308,14 @@ class CheckoutProcessor
             $this->debug_log('Subscription created successfully - ID: ' . $result['subscription_id']);
 
             // Get checkout URL for the subscription order
-            if (isset($result['order_reference_id'])) {
+            if (!empty($result['order_reference_id'])) {
+                // Callbacks, the return URL and the status checks find the order by this reference.
+                $order->update_meta_data('_tapsilat_reference_id', $result['order_reference_id']);
+                $order->add_meta_data('_tapsilat_attempt_reference_id', $result['order_reference_id']);
+                $order->update_meta_data('_tapsilat_amount', $this->formatAmount($order->get_total()));
+                $order->update_meta_data('_tapsilat_currency', $order->get_currency());
+                $order->save();
+
                 $checkoutUrl = $this->getCheckoutUrl($result['order_reference_id']);
 
                 return [
@@ -304,7 +371,7 @@ class CheckoutProcessor
         try {
             // getCheckoutUrl returns the URL string directly (it handles OrderResponse internally)
             $checkoutUrl = $this->tapsilatAPI->getCheckoutUrl($referenceId);
-            return $checkoutUrl;
+            return $checkoutUrl ?: false;
         } catch (\Exception $e) {
             $this->debug_log('Checkout URL Error: ' . $e->getMessage());
             return false;
@@ -312,123 +379,150 @@ class CheckoutProcessor
     }
 
     /**
-     * Get existing order by conversation_id
+     * The metadata sent with the order: the WooCommerce order and the custom metadata setting.
+     * Tapsilat stores metadata as string key/value pairs.
      *
-     * @param string $conversationId
-     * @return array|false
+     * @param WC_Order $order
+     * @return array
      */
-    private function getOrderByConversationId($conversationId)
+    private function buildMetadata(WC_Order $order)
     {
-        if (!$this->tapsilatAPI) {
-            return false;
+        $metadata = [
+            'woocommerce_order_id' => $order->get_id(),
+            'woocommerce_order_number' => $order->get_order_number(),
+            'woocommerce_order_key' => $order->get_order_key(),
+            'payment_source' => 'woocommerce_api',
+            'plugin_version' => defined('TAPSILAT_WOOCOMMERCE_VERSION') ? TAPSILAT_WOOCOMMERCE_VERSION : '',
+            'site_url' => get_site_url()
+        ];
+
+        // Add custom metadata from settings if available
+        if (!empty($this->settings['custom_metadata'])) {
+            $customMetadata = json_decode($this->settings['custom_metadata'], true);
+            if (is_array($customMetadata)) {
+                $metadata = array_merge($metadata, $customMetadata);
+            }
         }
 
-        try {
-            // Check if we have this order stored in our cache first
-            $cachedOrder = get_transient('tapsilat_order_' . $conversationId);
-            if ($cachedOrder) {
-                $this->debug_log('Using cached order for conversation_id: ' . $conversationId);
-                return $cachedOrder;
+        return array_map(function ($value) {
+            if (is_bool($value)) {
+                return $value ? 'true' : 'false';
             }
-
-            // Try to get order from Tapsilat API using conversation_id
-            // Note: This might need to be implemented in the Tapsilat SDK
-            if (method_exists($this->tapsilatAPI, 'getOrderByConversationId')) {
-                $response = $this->tapsilatAPI->getOrderByConversationId($conversationId);
-
-                if ($response && method_exists($response, 'getReferenceId') && $response->getReferenceId()) {
-                    $orderData = [
-                        'reference_id' => $response->getReferenceId(),
-                        'order_id' => $response->getOrderId(),
-                        'checkout_url' => $response->getCheckoutUrl(),
-                        'data' => $response->getData()
-                    ];
-
-                    // Cache for 30 minutes
-                    set_transient('tapsilat_order_' . $conversationId, $orderData, 30 * MINUTE_IN_SECONDS);
-
-                    return $orderData;
-                }
-            }
-
-            return false;
-        } catch (\Exception $e) {
-            $this->debug_log('Error getting order by conversation_id: ' . $e->getMessage());
-            return false;
-        }
+            return is_scalar($value) || $value === null ? (string) $value : wp_json_encode($value);
+        }, $metadata);
     }
 
-    private function buildBasketItemsFromOrder(\WC_Order $order) {
+    /**
+     * The order's lines as basket items. Tapsilat requires their prices, which are line totals,
+     * to add up to the order amount, so taxes, shipping and fees are included; when they still
+     * do not add up, or a line is negative, the order is sent as a single item.
+     *
+     * @param WC_Order $order
+     * @param float $amount The order amount sent to Tapsilat
+     * @return BasketItemDTO[]
+     */
+    private function buildBasketItemsFromOrder(WC_Order $order, $amount)
+    {
         $basketItems = [];
-        foreach ($order->get_items() as $item_id => $item) {
+        foreach ($order->get_items() as $itemId => $item) {
             $product = $item->get_product();
-            $item_type = 'PHYSICAL';
-            if ($product && $product->is_virtual()) {
-                $item_type = 'VIRTUAL';
-            }
-
-            $basketItem = new \Tapsilat\Models\BasketItemDTO(
-                'Other', // category1
-                null, // category2
-                null, // coupon
-                null, // coupon_discount
-                null, // data
-                (string) ($product ? $product->get_id() : $item_id), // id
-                $item_type, // item_type
-                $item->get_name(), // name
-                null, // paid_amount
-                (float) $item->get_total(), // price
-                null, // commission_amount
-                null, // mcc
-                null, // payer
-                $item->get_quantity() // quantity
+            $basketItems[] = $this->basketItem(
+                (string) $itemId,
+                $item->get_name(),
+                (float) $item->get_total() + (float) $item->get_total_tax(),
+                max(1, (int) $item->get_quantity()),
+                $product && $product->is_virtual() ? 'VIRTUAL' : 'PHYSICAL'
             );
-            $basketItems[] = $basketItem;
         }
+        foreach ($order->get_items('shipping') as $itemId => $item) {
+            $basketItems[] = $this->basketItem(
+                'shipping-' . $itemId,
+                $item->get_name(),
+                (float) $item->get_total() + (float) $item->get_total_tax(),
+                1,
+                'VIRTUAL',
+                'Shipping'
+            );
+        }
+        foreach ($order->get_items('fee') as $itemId => $item) {
+            $basketItems[] = $this->basketItem(
+                'fee-' . $itemId,
+                $item->get_name(),
+                (float) $item->get_total() + (float) $item->get_total_tax(),
+                1,
+                'VIRTUAL',
+                'Fee'
+            );
+        }
+
+        $sum = 0;
+        $valid = !empty($basketItems);
+        foreach ($basketItems as $basketItem) {
+            $sum += (int) round($basketItem->price * 100);
+            if ($basketItem->price < 0) {
+                $valid = false;
+            }
+        }
+
+        if (!$valid || $sum !== (int) round($amount * 100)) {
+            return [$this->basketItem(
+                'order-' . $order->get_id(),
+                /* translators: %s: order number */
+                sprintf(__('Order #%s', 'tapsilat-woocommerce'), $order->get_order_number()),
+                $amount,
+                1,
+                'PHYSICAL'
+            )];
+        }
+
         return $basketItems;
     }
 
-    private function syncBasketItems(\WC_Order $order, $existingOrder) {
-        $referenceId = $existingOrder->getReferenceId();
-        $wooItems = $this->buildBasketItemsFromOrder($order);
-        
-        $existingData = $existingOrder->getData();
-        $tapsilatItems = isset($existingData['basket_items']) ? $existingData['basket_items'] : [];
+    private function basketItem($id, $name, $price, $quantity, $itemType, $category = 'Other')
+    {
+        return new BasketItemDTO(
+            $category, // category1
+            null, // category2
+            null, // coupon
+            null, // coupon_discount
+            null, // data
+            $id, // id
+            $itemType, // item_type
+            $name, // name
+            null, // paid_amount
+            $this->formatAmount($price), // price
+            null, // commission_amount
+            null, // mcc
+            null, // payer
+            $quantity // quantity
+        );
+    }
 
-        $tapsilatMap = [];
-        foreach ($tapsilatItems as $tItem) {
-            $tapsilatMap[(string)$tItem['id']] = $tItem;
-        }
-        
-        $wooMap = [];
-        foreach ($wooItems as $wItem) {
-            $wooMap[(string)$wItem->id] = $wItem;
+    /**
+     * @param string|float $amount
+     * @return float
+     */
+    private function formatAmount($amount)
+    {
+        return round((float) $amount, 2);
+    }
+
+    /**
+     * The phone number as digits with an optional leading "+", or null when it is too short to
+     * be one, so that an unusual format does not make the SDK reject the order.
+     *
+     * @param string $phone
+     * @return string|null
+     */
+    private function cleanPhone($phone)
+    {
+        $phone = trim((string) $phone);
+        $digits = preg_replace('/\D/', '', $phone);
+        if (strlen($digits) < 5) {
+            return null;
         }
 
-        // Add or Update
-        foreach ($wooMap as $id => $wItem) {
-            if (!isset($tapsilatMap[$id])) {
-                $req = new \Tapsilat\Models\AddBasketItemRequest($referenceId, $wItem);
-                $this->addBasketItem($req);
-                $this->debug_log("Added basket item: " . $id);
-            } else {
-                $tItem = $tapsilatMap[$id];
-                if ((float)$tItem['price'] != (float)$wItem->price || (int)$tItem['quantity'] != (int)$wItem->quantity || $tItem['name'] != $wItem->name) {
-                    $req = new \Tapsilat\Models\UpdateBasketItemRequest($referenceId, $wItem);
-                    $this->updateBasketItem($req);
-                    $this->debug_log("Updated basket item: " . $id);
-                }
-            }
-        }
-        
-        // Remove
-        foreach ($tapsilatMap as $id => $tItem) {
-            if (!isset($wooMap[$id])) {
-                $req = new \Tapsilat\Models\RemoveBasketItemRequest($referenceId, $id);
-                $this->removeBasketItem($req);
-                $this->debug_log("Removed basket item: " . $id);
-            }
-        }
+        return (strpos($phone, '+') === 0 ? '+' : '') . $digits;
     }
 
     /**
@@ -464,8 +558,8 @@ class CheckoutProcessor
         }
 
         try {
-            $this->tapsilatAPI->cancelOrder(new \Tapsilat\Models\CancelOrderDTO($referenceId));
-            return true;
+            $response = $this->tapsilatAPI->cancelOrder(new \Tapsilat\Models\CancelOrderDTO($referenceId));
+            return $this->isSuccessful($response, 'Order Cancel');
         } catch (\Exception $e) {
             $this->debug_log('Order Cancel Error: ' . $e->getMessage());
             return false;
@@ -476,7 +570,7 @@ class CheckoutProcessor
      * Refund order in Tapsilat
      *
      * @param string $referenceId
-     * @param float $amount
+     * @param float|string $amount
      * @return bool
      */
     public function refundOrder($referenceId, $amount)
@@ -486,14 +580,29 @@ class CheckoutProcessor
         }
 
         try {
-            $refundDTO = new \Tapsilat\Models\RefundOrderDTO($amount, $referenceId);
-            $this->tapsilatAPI->refundOrder($refundDTO);
-            return true;
+            // WooCommerce passes the amount as a decimal string; Tapsilat expects a number.
+            $refundDTO = new \Tapsilat\Models\RefundOrderDTO($this->formatAmount($amount), $referenceId);
+            $response = $this->tapsilatAPI->refundOrder($refundDTO);
+            return $this->isSuccessful($response, 'Order Refund');
         } catch (\Exception $e) {
             $this->debug_log('Order Refund Error: ' . $e->getMessage());
             return false;
         }
     }
+
+    /**
+     * Tapsilat answers some refused operations with 200 and is_success false.
+     */
+    private function isSuccessful($response, $operation)
+    {
+        if (is_array($response) && array_key_exists('is_success', $response) && !$response['is_success']) {
+            $this->debug_log($operation . ' Error: ' . ($response['message'] ?? 'is_success is false'));
+            return false;
+        }
+
+        return true;
+    }
+
 
     /**
      * Get country name
@@ -529,7 +638,7 @@ class CheckoutProcessor
 
     public function getOrder($referenceId) {
         if (!$this->tapsilatAPI) return false;
-        try { return $this->tapsilatAPI->getOrder($referenceId); } catch (Exception $e) { $this->debug_log('getOrder error: ' . $e->getMessage()); return false; }
+        try { return $this->tapsilatAPI->getOrder($referenceId); } catch (\Exception $e) { $this->debug_log('getOrder error: ' . $e->getMessage()); return false; }
     }
     public function getOrderList($page = 1, $perPage = 10, $startDate = '', $endDate = '', $organizationId = '', $relatedReferenceId = '') {
         if (!$this->tapsilatAPI) return false;
@@ -609,6 +718,6 @@ class CheckoutProcessor
     }
     public function orderCallback($id) {
         if (!$this->tapsilatAPI) return false;
-        try { return $this->tapsilatAPI->orderCallback($id); } catch (Exception $e) { $this->debug_log('orderCallback error: ' . $e->getMessage()); return false; }
+        try { return $this->tapsilatAPI->orderCallback($id); } catch (\Exception $e) { $this->debug_log('orderCallback error: ' . $e->getMessage()); return false; }
     }
 }

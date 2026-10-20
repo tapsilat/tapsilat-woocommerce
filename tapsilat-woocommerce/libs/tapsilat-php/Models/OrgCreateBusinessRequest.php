@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrgCreateBusinessRequest
@@ -26,7 +27,8 @@ class OrgCreateBusinessRequest
         $phone,
         $tax_number,
         $tax_office,
-        $zip_code) {
+        $zip_code
+    ) {
         $this->address = $address;
         $this->business_name = $business_name;
         $this->business_type = $business_type;

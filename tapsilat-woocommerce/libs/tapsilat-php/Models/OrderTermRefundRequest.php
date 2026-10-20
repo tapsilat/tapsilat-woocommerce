@@ -1,10 +1,12 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrderTermRefundRequest
 {
     public $term_id;
     public $amount;
+    /** The order's reference ID; the server requires it. */
     public $reference_id;
     public $term_payment_id;
 

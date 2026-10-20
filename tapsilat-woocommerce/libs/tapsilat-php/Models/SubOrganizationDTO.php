@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class SubOrganizationDTO
