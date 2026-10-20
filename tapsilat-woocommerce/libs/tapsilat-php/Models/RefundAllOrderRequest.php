@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class RefundAllOrderRequest
@@ -6,7 +7,8 @@ class RefundAllOrderRequest
     public $reference_id;
 
     public function __construct(
-        $reference_id) {
+        $reference_id
+    ) {
         $this->reference_id = $reference_id;
     }
 

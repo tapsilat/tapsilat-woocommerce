@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class UpdateCallbackURLRequest
@@ -30,7 +31,7 @@ class UpdateCallbackURLRequest
         ], function ($value) {
             return $value !== null;
         });
-        
+
         // Handle nested DTOs if any
         foreach ($data as $key => $val) {
             if (is_object($val) && method_exists($val, 'toArray')) {

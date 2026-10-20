@@ -10,6 +10,7 @@ if (!defined("ABSPATH")) {
 
 // Get settings with proper sanitization
 $settings = get_option("woocommerce_tapsilat_settings", array());
+// $checkoutUrl is set by WC_Gateway_Tapsilat::receipt()
 ?>
 <?php if (empty($settings["Token"])) { ?>
     <section>
@@ -19,7 +20,7 @@ $settings = get_option("woocommerce_tapsilat_settings", array());
             </ul>
         </div>
     </section>
-<?php } else if(isset($response["reference_id"]) && !empty($response["reference_id"])){ ?>
+<?php } else if (!empty($checkoutUrl)) { ?>
     <style>
         .modal {
             display: block;
@@ -71,11 +72,7 @@ $settings = get_option("woocommerce_tapsilat_settings", array());
             btn.onclick = function() {
                 modal.style.display = "block";
                 btn.style.display = "none";
-                <?php 
-                $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
-                $checkoutUrl = $checkoutProcessor->getCheckoutUrl(sanitize_text_field($response["reference_id"]));
-                ?>
-                iframe.src = "<?php echo esc_url($checkoutUrl); ?>";
+                iframe.src = <?php echo wp_json_encode(esc_url_raw($checkoutUrl)); ?>;
             }
 
             span.onclick = function() {

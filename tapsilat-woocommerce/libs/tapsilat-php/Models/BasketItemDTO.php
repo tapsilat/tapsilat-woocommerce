@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class BasketItemDTO
@@ -26,6 +27,8 @@ class BasketItemDTO
     public $quantity_unit;
     public $sub_merchant_key;
     public $sub_merchant_price;
+    /** RFC3339 time before which the item's marketplace payout is not released. */
+    public $payout_release_at;
 
     public function __construct(
         $category1 = null,
@@ -45,8 +48,15 @@ class BasketItemDTO
         $quantity_float = null,
         $quantity_unit = null,
         $sub_merchant_key = null,
-        $sub_merchant_price = null, $status = null, $item_payments = null, $paidable_amount = null, $refunded_amount = null, $refundable_amount = null
+        $sub_merchant_price = null,
+        $status = null,
+        $item_payments = null,
+        $paidable_amount = null,
+        $refunded_amount = null,
+        $refundable_amount = null,
+        $payout_release_at = null
     ) {
+        $this->payout_release_at = $payout_release_at;
         $this->status = $status;
         $this->item_payments = $item_payments;
         $this->paidable_amount = $paidable_amount;

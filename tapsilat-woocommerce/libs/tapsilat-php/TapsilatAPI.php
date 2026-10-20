@@ -1,6 +1,9 @@
 <?php
+
 namespace Tapsilat;
 
+use Tapsilat\Models\OrderChargeRequest;
+use Tapsilat\Models\CreateOrganizationCurrencyPayload;
 use Tapsilat\Models\OrderCreateRequest;
 use Tapsilat\Models\OrderResponse;
 use Tapsilat\Models\RefundOrderRequest;
@@ -42,14 +45,26 @@ use Tapsilat\Models\RefundOrderDTO;
 use Tapsilat\Models\SubmerchantCreateDTO;
 use Tapsilat\Models\SubmerchantUpdateDTO;
 use Tapsilat\Models\OrgUserTokenCreateReq;
-
+use Tapsilat\Models\OrderListFilter;
 
 class TapsilatAPI
 {
+    use Concerns\CardMethods;
+    use Concerns\SubmerchantSettlementMethods;
+    use Concerns\VposMethods;
+    use Concerns\MarketplaceMethods;
+
+    /** The header that carries the signature of every callback Tapsilat sends */
+    public const WEBHOOK_SIGNATURE_HEADER = 'Tapsilat-Signature';
+
+    /** How many seconds a callback's signature timestamp may differ from the current time */
+    public const WEBHOOK_TOLERANCE = 300;
+
     private $baseUrl;
     private $apiKey;
     private $timeout;
     private $debug = false;
+    private $currencyIdsByUnit = null;
 
     public function __construct($apiKey = '', $timeout = 10, $baseUrl = 'https://panel.tapsilat.dev/api/v1')
     {
@@ -72,13 +87,55 @@ class TapsilatAPI
         return $headers;
     }
 
+    /**
+     * Sends a request and returns the decoded JSON body ([] for an empty body). $endpoint is a path
+     * relative to the base URL, or an absolute URL such as one from versionedBaseUrl(). An error
+     * status, or a body that is not JSON, throws APIException.
+     */
     protected function makeRequest($method, $endpoint, $params = null, $jsonPayload = null, $isRaw = false)
     {
-        $url = $this->baseUrl . '/' . ltrim($endpoint, '/');
+        $url = $this->buildUrl($endpoint, $params);
         $headers = $this->getHeaders();
+        $body = null;
+        if ($jsonPayload !== null) {
+            $headers['Content-Type'] = 'application/json';
+            $body = $jsonPayload === [] ? '{}' : json_encode($jsonPayload);
+        } elseif (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+            $body = '';
+        }
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
+        if ($this->debug) {
+            echo "Request: {$method} {$url}\n";
+        }
+
+        list($status, $contentType, $raw) = $this->sendHttp($method, $url, $headers, $body);
+
+        if ($status >= 400) {
+            throw APIException::fromResponse($status, $raw);
+        }
+        if ($isRaw) {
+            return $raw;
+        }
+        // A deployment serving the panel UI answers unknown routes with its HTML page and status 200
+        if (stripos($contentType, 'text/html') !== false || strpos(ltrim($raw), '<') === 0) {
+            throw APIException::unexpectedResponse($status, $contentType, $raw);
+        }
+        if (trim($raw) === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+            throw new APIException($status, -1, 'invalid JSON response: ' . json_last_error_msg(), null, null, $raw);
+        }
+        return $decoded;
+    }
+
+    /**
+     * Performs the HTTP request and returns [status code, content type, body].
+     */
+    protected function sendHttp($method, $url, array $headers, $body)
+    {
+        $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
@@ -87,44 +144,125 @@ class TapsilatAPI
         foreach ($headers as $key => $value) {
             $curlHeaders[] = $key . ': ' . $value;
         }
-
-        if ($jsonPayload !== null) {
-            $curlHeaders[] = 'Content-Type: application/json';
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($jsonPayload));
-        }
-
-        if ($params !== null && $method === 'GET') {
-            $url .= '?' . http_build_query($params);
-            curl_setopt($ch, CURLOPT_URL, $url);
-        }
-
-        if ($this->debug) {
-            echo "Request: {$method} {$url}\n";
-            echo "Headers: " . implode(", ", $curlHeaders) . "\n";
-        }
-
         curl_setopt($ch, CURLOPT_HTTPHEADER, $curlHeaders);
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
 
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         $error = curl_error($ch);
 
         if (is_resource($ch)) {
             curl_close($ch);
         }
 
-        if ($error) {
-            throw new APIException(0, -1, $error);
+        if ($response === false || $error) {
+            throw new APIException(0, -1, $error ?: 'request failed');
         }
 
-        if ($httpCode >= 400) {
-            $errorData = json_decode($response, true);
-            $apiCode = isset($errorData['code']) ? $errorData['code'] : -1;
-            $errorMsg = isset($errorData['error']) ? $errorData['error'] : 'HTTP error';
-            throw new APIException($httpCode, $apiCode, $errorMsg);
-        }
+        return [$status, $contentType, (string)$response];
+    }
 
-        return $isRaw ? $response : ($response ? json_decode($response, true) : []);
+    private function buildUrl($endpoint, $params = null)
+    {
+        $url = preg_match('#^https?://#i', $endpoint) ? $endpoint : $this->baseUrl . '/' . ltrim($endpoint, '/');
+        if (is_array($params) && $params) {
+            $query = self::buildQuery($params);
+            if ($query !== '') {
+                $url .= (strpos($url, '?') === false ? '?' : '&') . $query;
+            }
+        }
+        return $url;
+    }
+
+    /**
+     * Encodes query parameters, skipping null and empty values. Booleans become "true" or
+     * "false", and a list value repeats its key.
+     */
+    public static function buildQuery(array $params)
+    {
+        $parts = [];
+        foreach ($params as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $item) {
+                if ($item === null || $item === '') {
+                    continue;
+                }
+                if (is_bool($item)) {
+                    $item = $item ? 'true' : 'false';
+                }
+                $parts[] = rawurlencode($key) . '=' . rawurlencode((string)$item);
+            }
+        }
+        return implode('&', $parts);
+    }
+
+    /**
+     * Returns the base URL for another API version: a trailing /api/vN is replaced with
+     * /api/{version}, otherwise /api/{version} is appended.
+     */
+    public function versionedBaseUrl($version)
+    {
+        if (preg_match('#^(.*)/api/v\d+$#', $this->baseUrl, $matches)) {
+            return $matches[1] . '/api/' . $version;
+        }
+        return $this->baseUrl . '/api/' . $version;
+    }
+
+    /**
+     * Returns the absolute API v2 URL for $path.
+     */
+    protected function v2Url($path)
+    {
+        return $this->versionedBaseUrl('v2') . '/' . ltrim($path, '/');
+    }
+
+    /**
+     * Formats a path with sprintf, escaping each argument as a single path segment.
+     */
+    protected function path($format, ...$ids)
+    {
+        return vsprintf($format, array_map(function ($id) {
+            return rawurlencode((string)$id);
+        }, $ids));
+    }
+
+    /**
+     * Returns the organization currency UUID for $reference. A UUID is returned in lowercase; a
+     * unit such as "TRY" is looked up in getOrganizationCurrencies(), whose result is cached.
+     * Most endpoints accept units directly, so this is only needed where a UUID is required.
+     */
+    public function resolveCurrencyId($reference)
+    {
+        $ref = trim((string)$reference);
+        if ($ref === '') {
+            throw new APIException(0, 0, 'currency_id is required');
+        }
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $ref)) {
+            return strtolower($ref);
+        }
+        if ($this->currencyIdsByUnit === null) {
+            $response = $this->getOrganizationCurrencies();
+            $map = [];
+            $currencies = isset($response['currencies']) && is_array($response['currencies'])
+                ? $response['currencies']
+                : [];
+            foreach ($currencies as $currency) {
+                if (!empty($currency['currency_unit']) && !empty($currency['id'])) {
+                    $map[strtoupper(trim($currency['currency_unit']))] = $currency['id'];
+                }
+            }
+            $this->currencyIdsByUnit = $map;
+        }
+        $unit = strtoupper($ref);
+        if (!isset($this->currencyIdsByUnit[$unit])) {
+            throw new APIException(0, 0, sprintf(
+                'unknown currency reference "%s"; use a currency UUID or organization currency unit',
+                $reference
+            ));
+        }
+        return $this->currencyIdsByUnit[$unit];
     }
 
     public function createOrder(OrderCreateRequest $order)
@@ -138,12 +276,15 @@ class TapsilatAPI
 
         // Validate installments if provided
         if (isset($order->enabled_installments) && $order->enabled_installments) {
-            $order->enabled_installments = Validators::validateInstallments($order->enabled_installments);
+            $installments = $order->enabled_installments;
+            $order->enabled_installments = Validators::validateInstallments(
+                is_array($installments) ? implode(',', $installments) : $installments
+            );
         }
 
         $payload = $order->toArray();
         $response = $this->makeRequest('POST', $endpoint, null, $payload);
-        
+
         return new OrderResponse($response);
     }
 
@@ -217,34 +358,38 @@ class TapsilatAPI
 
     public function getOrder($referenceId)
     {
-        $endpoint = "/order/{$referenceId}";
+        $endpoint = $this->path("/order/%s", $referenceId);
         $response = $this->makeRequest('GET', $endpoint);
         return new OrderResponse($response);
     }
 
     public function getOrderByConversationId($conversationId)
     {
-        $endpoint = "/order/conversation/{$conversationId}";
+        $endpoint = $this->path("/order/conversation/%s", $conversationId);
         $response = $this->makeRequest('GET', $endpoint);
         return new OrderResponse($response);
     }
 
-    
-    
+
+
     // --- Aliases for Python SDK Compatibility ---
+    /**
+     * Links an order to a related reference ID; $payload holds related_reference_id.
+     */
     public function relatedUpdate(string $id, array $payload)
     {
-        return $this->orderRelatedUpdate($id, $payload);
+        $related = isset($payload['related_reference_id']) ? $payload['related_reference_id'] : null;
+        return $this->orderRelatedUpdate(new OrderRelatedReferenceRequest($id, $related));
     }
 
     public function terminateOrder(string $id)
     {
-        return $this->orderTerminate($id);
+        return $this->orderTerminate(new TerminateRequest($id));
     }
 
-    public function manualCallback(string $id)
+    public function manualCallback(string $id, $conversationId = null)
     {
-        return $this->orderManualCallback($id);
+        return $this->orderManualCallback(new OrderManualCallbackRequest($id, $conversationId));
     }
 
 
@@ -257,13 +402,13 @@ class TapsilatAPI
 
     public function getOrderPdf(string $id)
     {
-        $endpoint = "/order/{$id}/export/pdf";
+        $endpoint = $this->path("/order/%s/export/pdf", $id);
         return $this->makeRequest("GET", $endpoint, null, null, true);
     }
 
     public function getOrderExcel(string $id)
     {
-        $endpoint = "/order/{$id}/export/excel";
+        $endpoint = $this->path("/order/%s/export/excel", $id);
         return $this->makeRequest("GET", $endpoint, null, null, true);
     }
 
@@ -281,8 +426,14 @@ class TapsilatAPI
         return $this->makeRequest("POST", $endpoint, null, $payload);
     }
 
-    public function getOrderList($page = 1, $perPage = 10, $startDate = '', $endDate = '', $organizationId = '', $relatedReferenceId = '')
-    {
+    public function getOrderList(
+        $page = 1,
+        $perPage = 10,
+        $startDate = '',
+        $endDate = '',
+        $organizationId = '',
+        $relatedReferenceId = ''
+    ) {
         $endpoint = '/order/list';
         $params = array_filter([
             'page' => $page,
@@ -295,6 +446,14 @@ class TapsilatAPI
             return $value !== '' && $value !== null;
         });
         return $this->makeRequest('GET', $endpoint, $params);
+    }
+
+    /**
+     * Lists orders with every filter the order list endpoint accepts.
+     */
+    public function getOrderListWithFilter(OrderListFilter $filter)
+    {
+        return $this->makeRequest('GET', '/order/list', $filter->toArray());
     }
 
     public function getOrderSubmerchants($page = 1, $perPage = 10)
@@ -351,22 +510,31 @@ class TapsilatAPI
         return $this->makeRequest('POST', $endpoint, null, $payload);
     }
 
+    public function getOrderPaymentDetailsByConversationId($conversationId)
+    {
+        return $this->makeRequest('POST', '/order/payment-details', null, ['conversation_id' => $conversationId]);
+    }
+
     public function getOrderPaymentDetailsById($referenceId)
     {
-        $endpoint = "/order/{$referenceId}/payment-details";
+        $endpoint = $this->path("/order/%s/payment-details", $referenceId);
         return $this->makeRequest('GET', $endpoint);
     }
 
     public function getOrderStatus($referenceId)
     {
-        $endpoint = "/order/{$referenceId}/status";
+        $endpoint = $this->path("/order/%s/status", $referenceId);
         return $this->makeRequest('GET', $endpoint);
     }
 
+    /**
+     * Returns the order's transactions; the list is empty when there are none.
+     */
     public function getOrderTransactions($referenceId)
     {
-        $endpoint = "/order/{$referenceId}/transactions";
-        return $this->makeRequest('GET', $endpoint);
+        $endpoint = $this->path("/order/%s/transactions", $referenceId);
+        $transactions = $this->makeRequest('GET', $endpoint);
+        return $transactions === null ? [] : $transactions;
     }
 
     public function getOrderTerm($termReferenceId)
@@ -464,13 +632,13 @@ class TapsilatAPI
 
     public function orderCallback($id)
     {
-        $endpoint = "/orders/{$id}/callback";
+        $endpoint = $this->path("/orders/%s/callback", $id);
         return $this->makeRequest('GET', $endpoint);
     }
 
     public function orderVposQuery($id)
     {
-        $endpoint = "/orders/{$id}/vpos-query";
+        $endpoint = $this->path("/orders/%s/vpos-query", $id);
         return $this->makeRequest('GET', $endpoint);
     }
 
@@ -506,6 +674,9 @@ class TapsilatAPI
         return $this->makeRequest('GET', $endpoint);
     }
 
+    /**
+     * @deprecated The API has no organization user limit route, so this call always fails.
+     */
     public function getOrganizationLimitUser(GetUserLimitRequest $request)
     {
         $endpoint = '/organization/limit/user';
@@ -513,6 +684,9 @@ class TapsilatAPI
         return $this->makeRequest('GET', $endpoint, null, $payload);
     }
 
+    /**
+     * @deprecated The API has no organization user limit route, so this call always fails.
+     */
     public function setOrganizationLimitUser(SetLimitUserRequest $request)
     {
         $endpoint = '/organization/limit/user';
@@ -520,6 +694,10 @@ class TapsilatAPI
         return $this->makeRequest('POST', $endpoint, null, $payload);
     }
 
+    /**
+     * @deprecated The API has no /organization/limits route, so this call always fails.
+     *             Use getOrganizationLimitsById().
+     */
     public function getOrganizationLimits()
     {
         $endpoint = '/organization/limits';
@@ -535,7 +713,7 @@ class TapsilatAPI
 
     public function getOrganizationMeta($name)
     {
-        $endpoint = "/organization/metas/{$name}";
+        $endpoint = $this->path("/organization/metas/%s", $name);
         return $this->makeRequest('GET', $endpoint);
     }
 
@@ -554,13 +732,13 @@ class TapsilatAPI
 
     public function getOrganizationSuborganizationDetails(string $id)
     {
-        $endpoint = "/organization/suborganizations/{$id}";
+        $endpoint = $this->path("/organization/suborganizations/%s", $id);
         return $this->makeRequest('GET', $endpoint);
     }
 
     public function getOrganizationSuborganizationSubmerchants(string $id)
     {
-        $endpoint = "/organization/suborganizations/{$id}/submerchant";
+        $endpoint = $this->path("/organization/suborganizations/%s/submerchant", $id);
         return $this->makeRequest('GET', $endpoint);
     }
 
@@ -570,7 +748,7 @@ class TapsilatAPI
         return $this->makeRequest('GET', $endpoint);
     }
 
-    
+
     public function createOrganizationUserToken(OrgUserTokenCreateReq $request)
     {
         $endpoint = "/organization/user/token";
@@ -599,7 +777,7 @@ class TapsilatAPI
         return $this->makeRequest('POST', $endpoint, null, $payload);
     }
 
-    
+
     public function createSubmerchant(SubmerchantCreateDTO $request)
     {
         $endpoint = "/submerchants";
@@ -609,26 +787,26 @@ class TapsilatAPI
 
     public function getSubmerchant(string $id)
     {
-        $endpoint = "/submerchants/{$id}";
+        $endpoint = $this->path("/submerchants/%s", $id);
         return $this->makeRequest("GET", $endpoint);
     }
 
     public function getSuborganizationBySubmerchant(string $id)
     {
-        $endpoint = "/submerchants/{$id}/suborganization";
+        $endpoint = $this->path("/submerchants/%s/suborganization", $id);
         return $this->makeRequest("GET", $endpoint);
     }
 
     public function updateSubmerchant(string $id, SubmerchantUpdateDTO $request)
     {
-        $endpoint = "/submerchants/{$id}";
+        $endpoint = $this->path("/submerchants/%s", $id);
         $payload = $request->toArray();
         return $this->makeRequest("PATCH", $endpoint, null, $payload);
     }
 
     public function deleteSubmerchant(string $id)
     {
-        $endpoint = "/submerchants/{$id}";
+        $endpoint = $this->path("/submerchants/%s", $id);
         return $this->makeRequest("DELETE", $endpoint);
     }
 
@@ -682,9 +860,124 @@ class TapsilatAPI
 
 
 
-    public static function verifyWebhook($payload, $signature, $secret)
+    /**
+     * Verifies the Tapsilat-Signature header of a callback against the organization's webhook secret.
+     *
+     * Tapsilat sends "t=<unix timestamp>,v1=<hex HMAC-SHA256 of '<timestamp>.<raw body>'>". The
+     * timestamp must be within $tolerance seconds of $now (time() by default; 0 disables the
+     * check) so that a captured callback cannot be replayed. $payload must be the raw request
+     * body, before any JSON decoding. The comparison takes constant time.
+     *
+     * A bare hex HMAC-SHA256 of the payload, with or without a "sha256=" prefix, is still accepted
+     * for signatures made the way earlier versions of this SDK documented.
+     *
+     * @param string $payload The raw request body
+     * @param string $signature The Tapsilat-Signature header
+     * @param string $secret The webhook secret from the panel's callback settings
+     * @param int $tolerance Seconds; 0 disables the timestamp check
+     * @param int|null $now Unix time to compare the timestamp with
+     * @return bool
+     */
+    public static function verifyWebhook(
+        $payload,
+        $signature,
+        $secret,
+        $tolerance = self::WEBHOOK_TOLERANCE,
+        $now = null
+    ) {
+        $signature = trim((string)$signature);
+        $secret = (string)$secret;
+        $payload = (string)$payload;
+        if ($signature === '' || $secret === '') {
+            return false;
+        }
+
+        if (strpos($signature, 'sha256=') === 0 || strpos($signature, '=') === false) {
+            if (strpos($signature, 'sha256=') === 0) {
+                $signature = substr($signature, strlen('sha256='));
+            }
+            return hash_equals(hash_hmac('sha256', $payload, $secret), strtolower($signature));
+        }
+
+        $timestamp = null;
+        $signatures = [];
+        foreach (explode(',', $signature) as $part) {
+            $pair = explode('=', trim($part), 2);
+            if (count($pair) !== 2) {
+                continue;
+            }
+            if ($pair[0] === 't') {
+                $timestamp = $pair[1];
+            } elseif ($pair[0] === 'v1') {
+                $signatures[] = strtolower($pair[1]);
+            }
+        }
+        if ($timestamp === null || !ctype_digit($timestamp) || !$signatures) {
+            return false;
+        }
+        if ($tolerance > 0 && abs(($now === null ? time() : (int)$now) - (int)$timestamp) > $tolerance) {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
+        foreach ($signatures as $candidate) {
+            if (hash_equals($expected, $candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public function chargeOrder(OrderChargeRequest $request)
     {
-        $expectedSignature = hash_hmac('sha256', $payload, $secret);
-        return 'sha256=' . $expectedSignature === $signature;
+        $endpoint = "/order/charge";
+        $payload = $request->toArray();
+        return $this->makeRequest("POST", $endpoint, null, $payload);
+    }
+
+    /**
+     * @deprecated The API has no /orders/payments route, so this call always fails.
+     *             Use getOrderPayments() with an order identifier.
+     */
+    public function getAllOrdersPayments()
+    {
+        $endpoint = "/orders/payments";
+        return $this->makeRequest("GET", $endpoint);
+    }
+
+    public function createOrganizationCurrency(CreateOrganizationCurrencyPayload $payload)
+    {
+        $endpoint = "/organization/currencies";
+        $payloadArray = $payload->toArray();
+        $response = $this->makeRequest("POST", $endpoint, null, $payloadArray);
+        $this->currencyIdsByUnit = null;
+        return $response;
+    }
+
+    public function getOrganizationPartners()
+    {
+        $endpoint = "/organization/partners";
+        return $this->makeRequest("GET", $endpoint);
+    }
+
+    public function getOrganizationLimitsById(string $id, array $params = [])
+    {
+        $endpoint = $this->path('/organization/%s/limits', $id);
+        return $this->makeRequest("GET", $endpoint, $params ?: null);
+    }
+
+    /**
+     * Checks that the API is reachable; the server answers with the text "OK".
+     */
+    public function healthCheck()
+    {
+        $body = $this->makeRequest('GET', '/health', null, null, true);
+        return ['status' => trim((string)$body)];
+    }
+
+    public function getSystemConfig()
+    {
+        $endpoint = "/system/config";
+        return $this->makeRequest("GET", $endpoint);
     }
 }

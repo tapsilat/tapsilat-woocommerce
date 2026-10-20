@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class SubscriptionCreateRequest
@@ -6,8 +7,10 @@ class SubscriptionCreateRequest
     public $amount;
     public $currency;
     public $title;
+    /** @deprecated The legacy day-count cadence; use interval and interval_count. */
     public $period;
     public $cycle;
+    /** @deprecated Ignored by the server; the subscription start date sets the billing anchor. */
     public $payment_date;
     public $external_reference_id;
     public $success_url;
@@ -15,6 +18,10 @@ class SubscriptionCreateRequest
     public $card_id;
     public $billing;
     public $user;
+    /** Billing interval, for example "month". */
+    public $interval;
+    /** Number of intervals between payments. */
+    public $interval_count;
 
     public function __construct(
         $amount = null,
@@ -28,8 +35,12 @@ class SubscriptionCreateRequest
         $period = null,
         $success_url = null,
         $title = null,
-        ?SubscriptionUserDTO $user = null
+        ?SubscriptionUserDTO $user = null,
+        $interval = null,
+        $interval_count = null
     ) {
+        $this->interval = $interval;
+        $this->interval_count = $interval_count;
         $this->amount = $amount;
         $this->billing = $billing;
         $this->card_id = $card_id;

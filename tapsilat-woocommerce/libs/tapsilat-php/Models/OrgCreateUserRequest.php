@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class OrgCreateUserRequest
@@ -17,10 +18,11 @@ class OrgCreateUserRequest
         $email,
         $first_name,
         $identity_number,
-        $is_mail_verified = false,
+        $is_mail_verified,
         $last_name,
         $phone,
-        $reference_id) {
+        $reference_id
+    ) {
         $this->conversation_id = $conversation_id;
         $this->email = $email;
         $this->first_name = $first_name;

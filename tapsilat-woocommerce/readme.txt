@@ -52,22 +52,19 @@ Tapsilat Payment Gateway for WooCommerce provides a secure and modern payment ga
 * Custom Logo: Upload custom logos for both payment method and checkout page
 * Custom Metadata: Add additional data to be sent with orders (JSON format)
 
-**Webhook URLs:**
-Configure these URLs in your Tapsilat merchant panel:
-* Success URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-success`
-* Failure URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-failure`
-* Callback URL: `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback`
+**Payment Callbacks:**
+Every order tells Tapsilat where to post its payment callbacks and where to return the customer, so no URL setup is needed. To also receive your organization's callbacks, enter `https://yoursite.com/wp-json/tapsilat/v1/webhook/payment-callback` as the callback URLs in your Tapsilat panel, and copy the webhook secret from there into the Webhook Secret setting. Callbacks with a wrong Tapsilat-Signature are rejected, and payment statuses are always confirmed with the Tapsilat API.
 
 **Automatic Order Status Updates:**
-The plugin includes an intelligent cron job system that automatically monitors and updates order statuses:
+A cron job checks the payment status of recent Tapsilat orders that are still pending, on hold, failed or cancelled:
 * Configurable Intervals: Set automatic checks every 5, 10, 15, or 30 minutes
-* Smart Processing: Only checks orders that need status updates to optimize performance
+* Smart Processing: Only checks orders created in the last 7 days that may still change
 * Recent Order Skip: Avoids checking recently modified orders to prevent conflicts
 
 **Supported Status Mappings:**
-* SUCCESS/COMPLETED → Processing (Payment completed, order processed)
-* FAILED/CANCELLED/EXPIRED → Failed (Order marked as failed)
-* PENDING/WAITING → On Hold (Order waiting for payment)
+* Paid / Completed / Sub merchant payment approved → payment completed
+* Failure / Cancelled / Expired / Rejected / Fraud / Terminated → Failed (the customer can pay again)
+* Waiting for payment and other statuses → unchanged, checked again later
 
 == Requirements ==
 

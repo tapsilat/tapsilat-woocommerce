@@ -29,26 +29,7 @@ class SubscriptionHelper
      */
     private function init_api_client()
     {
-        $token = isset($this->settings['Token']) ? $this->settings['Token'] : '';
-
-        if (empty($token)) {
-            return;
-        }
-
-        // Get API URL based on environment
-        $api_env = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-        $base_url = 'https://panel.tapsilat.com/api/v1';
-
-        if ($api_env === 'custom') {
-            $custom_url = isset($this->settings['custom_api_url']) ? $this->settings['custom_api_url'] : '';
-            if (!empty($custom_url)) {
-                $base_url = $custom_url;
-            } else {
-                $base_url = 'https://panel.tapsilat.dev/api/v1';
-            }
-        }
-
-        $this->api_client = new TapsilatAPI($token, 10, $base_url);
+        $this->api_client = \Tapsilat\WooCommerce\ApiClient::make($this->settings);
     }
 
     /**
@@ -112,10 +93,10 @@ class SubscriptionHelper
                 $order->get_currency(), // currency
                 $cycle,
                 'wc_order_' . $order->get_id(), // external_reference_id
-                $order->get_cancel_order_url(), // failure_url
+                \Tapsilat\WooCommerce\Checkout\CheckoutProcessor::callbackUrl($order), // failure_url
                 $payment_date,
                 $period,
-                $order->get_checkout_order_received_url(), // success_url
+                \Tapsilat\WooCommerce\Checkout\CheckoutProcessor::callbackUrl($order), // success_url
                 'Subscription for Order #' . $order->get_id(), // title
                 $user // user
             );

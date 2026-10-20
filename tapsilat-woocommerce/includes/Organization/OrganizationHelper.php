@@ -18,23 +18,7 @@ class OrganizationHelper
 
     private function init_api_client()
     {
-        $token = isset($this->settings['Token']) ? $this->settings['Token'] : '';
-        $apiUrl = $this->getApiUrl();
-        $this->tapsilatAPI = new TapsilatAPI($token, 10, $apiUrl);
-    }
-
-    private function getApiUrl()
-    {
-        $apiEnvironment = isset($this->settings['API']) ? $this->settings['API'] : 'production';
-        if ($apiEnvironment === 'custom') {
-            if (!empty($this->settings['custom_api_url'])) {
-                $customUrl = rtrim($this->settings['custom_api_url'], '/');
-                $customUrl = preg_replace('/\/api\/v1$/', '', $customUrl);
-                return $customUrl . '/api/v1/';
-            }
-            return 'https://panel.tapsilat.dev/api/v1/';
-        }
-        return 'https://panel.tapsilat.com/api/v1/';
+        $this->tapsilatAPI = \Tapsilat\WooCommerce\ApiClient::make(is_array($this->settings) ? $this->settings : []);
     }
 
     private function debug_log($message)
@@ -82,7 +66,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->createBusiness($businessData);
+            return $this->tapsilatAPI->createOrganizationBusiness($businessData);
         } catch (Exception $e) {
             $this->debug_log('Create business error: ' . $e->getMessage());
             return false;
@@ -93,7 +77,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getCurrencies();
+            return $this->tapsilatAPI->getOrganizationCurrencies();
         } catch (Exception $e) {
             $this->debug_log('Get currencies error: ' . $e->getMessage());
             return false;
@@ -104,40 +88,49 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getCurrencyPresets();
+            return $this->tapsilatAPI->getOrganizationCurrencyPresets();
         } catch (Exception $e) {
             $this->debug_log('Get currency presets error: ' . $e->getMessage());
             return false;
         }
     }
 
+    /**
+     * @deprecated The panel has no /organization/limit/user route, so this always fails.
+     */
     public function getLimitUser($userId)
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getLimitUser($userId);
+            return $this->tapsilatAPI->getOrganizationLimitUser(new \Tapsilat\Models\GetUserLimitRequest($userId));
         } catch (Exception $e) {
             $this->debug_log('Get limit user error: ' . $e->getMessage());
             return false;
         }
     }
 
+    /**
+     * @deprecated The panel has no /organization/limit/user route, so this always fails.
+     */
     public function setLimitUser($limitData)
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->setLimitUser($limitData);
+            return $this->tapsilatAPI->setOrganizationLimitUser($limitData);
         } catch (Exception $e) {
             $this->debug_log('Set limit user error: ' . $e->getMessage());
             return false;
         }
     }
 
+    /**
+     * @deprecated The panel has no /organization/limits route.
+     */
     public function getLimits()
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getLimits();
+            return $this->tapsilatAPI->getOrganizationLimits();
         } catch (Exception $e) {
             $this->debug_log('Get limits error: ' . $e->getMessage());
             return false;
@@ -148,18 +141,18 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getVposList();
+            return $this->tapsilatAPI->listVpos();
         } catch (Exception $e) {
             $this->debug_log('Get vpos list error: ' . $e->getMessage());
             return false;
         }
     }
 
-    public function getMetadata()
+    public function getMetadata($name)
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getMetadata();
+            return $this->tapsilatAPI->getOrganizationMeta($name);
         } catch (Exception $e) {
             $this->debug_log('Get metadata error: ' . $e->getMessage());
             return false;
@@ -170,7 +163,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getScopes();
+            return $this->tapsilatAPI->getOrganizationScopes();
         } catch (Exception $e) {
             $this->debug_log('Get scopes error: ' . $e->getMessage());
             return false;
@@ -181,7 +174,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getSuborganizationList();
+            return $this->tapsilatAPI->getOrganizationSuborganizations();
         } catch (Exception $e) {
             $this->debug_log('Get suborganization list error: ' . $e->getMessage());
             return false;
@@ -192,7 +185,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getSuborganizationDetails($id);
+            return $this->tapsilatAPI->getOrganizationSuborganizationDetails($id);
         } catch (Exception $e) {
             $this->debug_log('Get suborganization details error: ' . $e->getMessage());
             return false;
@@ -203,7 +196,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->getSuborgSubmerchants($id);
+            return $this->tapsilatAPI->getOrganizationSuborganizationSubmerchants($id);
         } catch (Exception $e) {
             $this->debug_log('Get suborg submerchants error: ' . $e->getMessage());
             return false;
@@ -214,7 +207,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->createUser($userData);
+            return $this->tapsilatAPI->createOrganizationUser($userData);
         } catch (Exception $e) {
             $this->debug_log('Create user error: ' . $e->getMessage());
             return false;
@@ -225,7 +218,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->verifyUser($verifyData);
+            return $this->tapsilatAPI->verifyOrganizationUser($verifyData);
         } catch (Exception $e) {
             $this->debug_log('Verify user error: ' . $e->getMessage());
             return false;
@@ -236,7 +229,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->verifyUserMobile($verifyData);
+            return $this->tapsilatAPI->verifyOrganizationUserMobile($verifyData);
         } catch (Exception $e) {
             $this->debug_log('Verify user mobile error: ' . $e->getMessage());
             return false;
@@ -247,7 +240,7 @@ class OrganizationHelper
     {
         if (!$this->tapsilatAPI) return false;
         try {
-            return $this->tapsilatAPI->createOrgUserToken($tokenReq);
+            return $this->tapsilatAPI->createOrganizationUserToken($tokenReq);
         } catch (Exception $e) {
             $this->debug_log('Create user token error: ' . $e->getMessage());
             return false;

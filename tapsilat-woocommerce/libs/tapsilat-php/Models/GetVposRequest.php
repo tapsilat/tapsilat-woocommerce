@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class GetVposRequest
@@ -6,7 +7,8 @@ class GetVposRequest
     public $currency_id;
 
     public function __construct(
-        $currency_id) {
+        $currency_id
+    ) {
         $this->currency_id = $currency_id;
     }
 

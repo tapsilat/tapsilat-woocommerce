@@ -1,4 +1,5 @@
 <?php
+
 namespace Tapsilat\Models;
 
 class UpdateBasketItemRequest
@@ -8,7 +9,8 @@ class UpdateBasketItemRequest
 
     public function __construct(
         $order_reference_id,
-        $basket_item) {
+        $basket_item
+    ) {
         $this->order_reference_id = $order_reference_id;
         $this->basket_item = $basket_item;
     }

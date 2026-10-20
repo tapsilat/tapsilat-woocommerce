@@ -16,6 +16,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+define('TAPSILAT_WOOCOMMERCE_VERSION', '2025.11.28.1');
+
 // Custom Autoloader
 spl_autoload_register(function ($class) {
     $prefix = 'Tapsilat\\';
@@ -93,6 +95,9 @@ add_action('rest_api_init', function () {
     $webhook_controller->register_routes();
 });
 
+// Customers return here from the Tapsilat checkout (WC()->api_request_url('tapsilat_return'))
+add_action('woocommerce_api_tapsilat_return', 'tapsilat_handle_return');
+
 // Initialize cron job for order status checks
 add_action('init', 'tapsilat_setup_cron');
 add_action('tapsilat_check_order_status', 'tapsilat_check_pending_orders');
@@ -110,25 +115,21 @@ function tapsilat_setup_cron()
     // Get current interval setting
     $settings = get_option('woocommerce_tapsilat_settings', []);
     $interval = isset($settings['cron_interval']) ? (int) $settings['cron_interval'] : 5;
+    if (!in_array($interval, [5, 10, 15, 30], true)) {
+        $interval = 5;
+    }
     $scheduleKey = "tapsilat_{$interval}_minutes";
 
-    // Clear existing schedules if interval changed
-    $currentSchedule = wp_next_scheduled('tapsilat_check_order_status');
-    if ($currentSchedule) {
+    // This runs on every request, so reschedule only when the interval changed. Clearing and
+    // scheduling every time made the next run always due, so the check ran on every request.
+    if (wp_get_schedule('tapsilat_check_order_status') !== $scheduleKey) {
         wp_clear_scheduled_hook('tapsilat_check_order_status');
+        wp_schedule_event(time() + $interval * MINUTE_IN_SECONDS, $scheduleKey, 'tapsilat_check_order_status');
     }
-
-    $currentSubscriptionSchedule = wp_next_scheduled('tapsilat_check_subscription_renewals');
-    if ($currentSubscriptionSchedule) {
-        wp_clear_scheduled_hook('tapsilat_check_subscription_renewals');
-    }
-
-    // Schedule with new interval
-    wp_schedule_event(time(), $scheduleKey, 'tapsilat_check_order_status');
 
     // Schedule subscription renewals (check every hour)
     if (!wp_next_scheduled('tapsilat_check_subscription_renewals')) {
-        wp_schedule_event(time(), 'hourly', 'tapsilat_check_subscription_renewals');
+        wp_schedule_event(time() + HOUR_IN_SECONDS, 'hourly', 'tapsilat_check_subscription_renewals');
     }
 }
 
@@ -163,10 +164,12 @@ function tapsilat_add_cron_schedule($schedules)
 
 function tapsilat_check_pending_orders()
 {
-    // Get all WooCommerce orders that are not completed and have Tapsilat payment
+    // Recent Tapsilat orders that may still change: unpaid ones, and failed or cancelled ones whose
+    // payment may have completed late.
     $orders = wc_get_orders(array(
-        'status' => array('pending', 'on-hold', 'processing', 'failed'),
+        'status' => array('pending', 'on-hold', 'failed', 'cancelled'),
         'payment_method' => 'tapsilat',
+        'date_created' => '>' . (time() - 7 * DAY_IN_SECONDS),
         'limit' => 50, // Limit to avoid performance issues
         'orderby' => 'date',
         'order' => 'DESC'
@@ -179,9 +182,7 @@ function tapsilat_check_pending_orders()
     $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
 
     foreach ($orders as $order) {
-        $referenceId = $order->get_meta('_tapsilat_reference_id');
-
-        if (empty($referenceId)) {
+        if (empty($order->get_meta('_tapsilat_reference_id'))) {
             continue;
         }
 
@@ -191,42 +192,54 @@ function tapsilat_check_pending_orders()
             continue;
         }
 
-        $orderStatus = $checkoutProcessor->getOrderStatus($referenceId);
-
-        if ($orderStatus && isset($orderStatus['status'])) {
-            $tapsilatStatus = strtoupper($orderStatus['status']);
-            $currentStatus = $order->get_status();
-
-            // Update order status based on Tapsilat response
-            switch ($tapsilatStatus) {
-                case 'SUCCESS':
-                case 'COMPLETED':
-                    if (!in_array($currentStatus, array('completed', 'processing'))) {
-                        $order->update_status('processing', __('Payment confirmed by Tapsilat via cron check.', 'tapsilat-woocommerce'));
-                        $order->payment_complete($referenceId);
-                    }
-                    break;
-
-                case 'FAILED':
-                case 'CANCELLED':
-                case 'EXPIRED':
-                    if ($currentStatus !== 'failed') {
-                        $order->update_status('failed', __('Payment failed/cancelled in Tapsilat via cron check.', 'tapsilat-woocommerce'));
-                    }
-                    break;
-
-                case 'PENDING':
-                case 'WAITING':
-                    if ($currentStatus !== 'on-hold') {
-                        $order->update_status('on-hold', __('Payment still pending in Tapsilat via cron check.', 'tapsilat-woocommerce'));
-                    }
-                    break;
-            }
-        }
+        // Marks paid orders paid and pending orders whose payment failed or expired failed.
+        $checkoutProcessor->syncOrderStatus($order, __('cron check', 'tapsilat-woocommerce'));
 
         // Small delay to avoid overwhelming the API
-        usleep(500000); // 0.5 second delay
+        usleep(200000); // 0.2 second delay
     }
+}
+
+/**
+ * Handles a customer returning from the Tapsilat checkout: checks the payment status with Tapsilat
+ * and sends the customer, out of the checkout iframe if there is one, to the order received page or
+ * back to the payment page.
+ */
+function tapsilat_handle_return()
+{
+    $order_id = isset($_GET['order_id']) ? absint(wp_unslash($_GET['order_id'])) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    $key = isset($_GET['key']) ? sanitize_text_field(wp_unslash($_GET['key'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+    $order = $order_id ? wc_get_order($order_id) : false;
+    if (!$order || $key === '' || !hash_equals($order->get_order_key(), $key)) {
+        wp_safe_redirect(wc_get_page_permalink('shop'));
+        exit;
+    }
+
+    $checkoutProcessor = new \Tapsilat\WooCommerce\Checkout\CheckoutProcessor();
+    $state = $checkoutProcessor->syncOrderStatus($order, __('customer returned', 'tapsilat-woocommerce'));
+
+    if ($state === 'failed') {
+        if (WC()->session) {
+            wc_add_notice(__('Your payment could not be completed. Please try again.', 'tapsilat-woocommerce'), 'error');
+        }
+        $target = $order->get_checkout_payment_url();
+    } else {
+        if ($state === 'paid' && WC()->cart) {
+            WC()->cart->empty_cart();
+        }
+        $target = $order->get_checkout_order_received_url();
+    }
+
+    // The checkout may be in an iframe on the payment page, so leave it from the top window.
+    nocache_headers();
+    header('Content-Type: text/html; charset=' . get_option('blog_charset'));
+    echo '<!DOCTYPE html><html><head><meta charset="' . esc_attr(get_option('blog_charset')) . '">'
+        . '<meta name="robots" content="noindex"><title>' . esc_html(get_bloginfo('name')) . '</title></head><body>'
+        . '<script>window.top.location.replace(' . wp_json_encode(esc_url_raw($target)) . ');</script>'
+        . '<noscript><a href="' . esc_url($target) . '" target="_top">' . esc_html__('Continue', 'tapsilat-woocommerce') . '</a></noscript>'
+        . '</body></html>';
+    exit;
 }
 
 function tapsilat_add_gateway($gateways)
@@ -346,7 +359,7 @@ function tapsilat_init_gateway()
                 }
             }
             add_action("woocommerce_receipt_" . $this->id, array($this, "receipt"));
-            add_action("woocommerce_thankyou_" . $this->id, array($this, "receipt"));
+            add_action("woocommerce_thankyou_" . $this->id, array($this, "thankyou"));
             add_action("woocommerce_update_options_payment_gateways_" . $this->id, array($this, "process_admin_options"));
 
             // Add admin scripts for dynamic field visibility
@@ -384,6 +397,10 @@ function tapsilat_init_gateway()
 
             if (isset($_POST['woocommerce_tapsilat_description'])) {
                 $_POST['woocommerce_tapsilat_description'] = sanitize_textarea_field(wp_unslash($_POST['woocommerce_tapsilat_description']));
+            }
+
+            if (isset($_POST['woocommerce_tapsilat_webhook_secret'])) {
+                $_POST['woocommerce_tapsilat_webhook_secret'] = sanitize_text_field(wp_unslash($_POST['woocommerce_tapsilat_webhook_secret']));
             }
 
             if (isset($_POST['woocommerce_tapsilat_custom_api_url'])) {
@@ -546,6 +563,15 @@ function tapsilat_init_gateway()
                     "desc_tip" => true,
                     "class" => "custom-api-url-field",
                     "placeholder" => "https://panel.tapsilat.dev/api/v1"
+                ),
+                "webhook_secret" => array(
+                    "title" => "Webhook Secret",
+                    "type" => "password",
+                    "description" => "The webhook secret from the callback settings of your Tapsilat panel. Callbacks whose Tapsilat-Signature header does not match it are rejected. Payment statuses are always confirmed with the Tapsilat API.",
+                    "desc_tip" => true,
+                    "custom_attributes" => array(
+                        "autocomplete" => "new-password"
+                    )
                 ),
 
                 // === PAYMENT SETTINGS ===
@@ -759,16 +785,11 @@ function tapsilat_init_gateway()
                     "type" => "title",
                     "description" => "
                         <div style='background: #f9f9f9; padding: 15px; border-left: 4px solid #1e40af; margin: 10px 0;'>
-                        <strong>🔗 Webhook URLs for Tapsilat Merchant Panel:</strong><br><br>
-                        <strong>Payment Webhooks:</strong><br>
-                        <strong>Payment Success:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/payment-success</code><br>
-                        <strong>Payment Failure:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/payment-failure</code><br>
-                        <strong>Payment Callback:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/payment-callback</code><br><br>
-                        <strong>Subscription Webhooks:</strong><br>
-                        <strong>Subscription Success:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/subscription-success</code><br>
-                        <strong>Subscription Renewal:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/subscription-renewal</code><br>
-                        <strong>Subscription Cancelled:</strong> <code>" . get_site_url() . "/wp-json/tapsilat/v1/webhook/subscription-cancelled</code><br><br>
-                        <em>💡 Copy these URLs and configure them in your Tapsilat merchant panel under webhook settings.</em>
+                        <strong>🔗 Payment callbacks</strong><br><br>
+                        Every order the plugin creates tells Tapsilat where to send its payment callbacks and where to return the customer, so no setup is needed for them.<br><br>
+                        To also receive your organization's callbacks, enter this URL as the callback, fail, cancel and refund callback URLs in the callback settings of your Tapsilat panel:<br>
+                        <code>" . esc_html(rest_url('tapsilat/v1/webhook/payment-callback')) . "</code><br><br>
+                        <em>💡 Copy the webhook secret from the same page into the Webhook Secret field above so that callbacks are verified.</em>
                         </div>
                     ",
                 ),
@@ -972,6 +993,21 @@ function tapsilat_init_gateway()
         public function process_payment($orderid)
         {
             $order = wc_get_order($orderid);
+            $settings = get_option("woocommerce_tapsilat_settings", array());
+
+            // In redirect mode, send the customer straight to the Tapsilat checkout.
+            if (isset($settings["payment_form_view_mode"]) && $settings["payment_form_view_mode"] === "redirect") {
+                $checkout = $this->prepare_checkout($order);
+                if (!empty($checkout['paid'])) {
+                    return array("result" => "success", "redirect" => $this->get_return_url($order));
+                }
+                if (empty($checkout['url'])) {
+                    wc_add_notice(__('Payment system error. Please try again.', 'tapsilat-woocommerce'), 'error');
+                    return array("result" => "failure");
+                }
+                return array("result" => "success", "redirect" => $checkout['url']);
+            }
+
             return array(
                 "result" => "success",
                 "redirect" => $order->get_checkout_payment_url(true),
@@ -1009,56 +1045,97 @@ function tapsilat_init_gateway()
         }
         function receipt($orderid)
         {
-            global $woocommerce;
             $order = wc_get_order($orderid);
-            if ($order->get_status() == "pending") {
-                $settings = get_option("woocommerce_tapsilat_settings");
+            if (!$order || !$order->needs_payment()) {
+                return;
+            }
 
-                // Check if returning from payment
-                $request_method = isset($_SERVER["REQUEST_METHOD"]) ? sanitize_text_field(wp_unslash($_SERVER["REQUEST_METHOD"])) : '';
-                if (
-                    $request_method === "GET" && isset($_GET["tapsilat_return"]) &&
-                    isset($_GET['_wpnonce']) &&
-                    wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'tapsilat_return')
-                ) {
-                    $this->handlePaymentReturn($order);
-                    return;
+            $checkout = $this->prepare_checkout($order);
+            if (!empty($checkout['paid'])) {
+                $this->leave_page($this->get_return_url($order));
+                return;
+            }
+            if (empty($checkout['url'])) {
+                echo '<ul class="woocommerce-error" role="alert"><li>' . esc_html__('Payment system error. Please try again.', 'tapsilat-woocommerce') . '</li></ul>';
+                return;
+            }
+
+            $settings = get_option("woocommerce_tapsilat_settings", array());
+            $mode = isset($settings["payment_form_view_mode"]) ? $settings["payment_form_view_mode"] : "iframe";
+            $checkoutUrl = $checkout['url'];
+
+            // Handle different display modes
+            if ($mode == "redirect") {
+                $this->leave_page($checkoutUrl);
+            } elseif ($mode == "popup") {
+                include plugin_dir_path(__FILE__) . "popup.php";
+            } else {
+                include plugin_dir_path(__FILE__) . "form.php";
+            }
+        }
+
+        /**
+         * A customer can reach the order received page before the payment callback arrives, so
+         * check the payment status there.
+         */
+        public function thankyou($orderid)
+        {
+            $order = wc_get_order($orderid);
+            if ($order && $order->needs_payment() && $order->get_meta('_tapsilat_reference_id')) {
+                $this->checkoutProcessor->syncOrderStatus($order, __('order received page', 'tapsilat-woocommerce'), false);
+            }
+        }
+
+        /**
+         * The Tapsilat checkout for the order: that of its Tapsilat order while it is unpaid and
+         * still matches the order, or else that of a new Tapsilat order.
+         *
+         * @param WC_Order $order
+         * @return array ['paid' => true], ['url' => string], or [] when no checkout is available
+         */
+        private function prepare_checkout($order)
+        {
+            $referenceId = $order->get_meta('_tapsilat_reference_id');
+            if ($referenceId) {
+                $state = $this->checkoutProcessor->syncOrderStatus($order, __('payment page', 'tapsilat-woocommerce'), false);
+                if ($state === 'paid') {
+                    return array('paid' => true);
                 }
-
-                // Check if we already have a reference_id for this order
-                $referenceId = $order->get_meta('_tapsilat_reference_id');
-
-                if (!$referenceId) {
-                    // Create new order with Tapsilat SDK
-                    $response = $this->checkoutProcessor->createOrder($order);
-                    if (!$response || !isset($response['reference_id'])) {
-                        wc_add_notice(__('Payment system error. Please try again.', 'tapsilat-woocommerce'), 'error');
-                        wp_redirect($order->get_cancel_order_url());
-                        exit;
+                // Reuse the checkout unless that payment failed, was cancelled, expired or the
+                // order changed since; also when the status could not be checked, rather than
+                // starting a second payment for the same order.
+                if (($state === 'pending' || $state === null) && $this->checkoutProcessor->isCurrentAttempt($order)) {
+                    $checkoutUrl = $this->checkoutProcessor->getCheckoutUrl($referenceId);
+                    if ($checkoutUrl) {
+                        return array('url' => $checkoutUrl);
                     }
-                    $referenceId = $response['reference_id'];
-                }
-
-                // Get checkout URL
-                $checkoutUrl = $this->checkoutProcessor->getCheckoutUrl($referenceId);
-                if (!$checkoutUrl) {
-                    wc_add_notice(__('Payment system error. Please try again.', 'tapsilat-woocommerce'), 'error');
-                    wp_redirect($order->get_cancel_order_url());
-                    exit;
-                }
-
-                // Handle different display modes
-                if ($settings["payment_form_view_mode"] == "redirect") {
-                    wp_redirect($checkoutUrl);
-                    exit;
-                } elseif ($settings["payment_form_view_mode"] == "popup") {
-                    $response = ['reference_id' => $referenceId];
-                    include plugin_dir_path(__FILE__) . "popup.php";
-                } else {
-                    $response = ['reference_id' => $referenceId];
-                    include plugin_dir_path(__FILE__) . "form.php";
                 }
             }
+
+            $response = $this->checkoutProcessor->createOrder($order);
+            if (!$response || empty($response['reference_id'])) {
+                return array();
+            }
+
+            $checkoutUrl = !empty($response['checkout_url'])
+                ? $response['checkout_url']
+                : $this->checkoutProcessor->getCheckoutUrl($response['reference_id']);
+
+            return $checkoutUrl ? array('url' => $checkoutUrl) : array();
+        }
+
+        /**
+         * Sends the customer to $url, also when the page has already started to render.
+         */
+        private function leave_page($url)
+        {
+            if (!headers_sent()) {
+                wp_redirect($url);
+                exit;
+            }
+
+            echo '<script>window.location.replace(' . wp_json_encode(esc_url_raw($url)) . ');</script>';
+            echo '<p><a href="' . esc_url($url) . '">' . esc_html__('Continue', 'tapsilat-woocommerce') . '</a></p>';
         }
 
         /**
@@ -1101,7 +1178,7 @@ function tapsilat_init_gateway()
                 'Not scheduled';
 
             $pendingOrders = wc_get_orders(array(
-                'status' => array('pending', 'on-hold', 'processing'),
+                'status' => array('pending', 'on-hold'),
                 'payment_method' => 'tapsilat',
                 'limit' => 1,
                 'return' => 'ids'
@@ -1140,44 +1217,6 @@ function tapsilat_init_gateway()
 
             // Default to plugin's logo file
             $this->icon = plugin_dir_url(__FILE__) . 'assets/logo.png';
-        }
-
-        /**
-         * Handle payment return from Tapsilat
-         */
-        private function handlePaymentReturn($order)
-        {
-            global $woocommerce;
-
-            $referenceId = $order->get_meta('_tapsilat_reference_id');
-            if (!$referenceId) {
-                wp_redirect($order->get_cancel_order_url());
-                exit;
-            }
-
-            // Get order status from Tapsilat
-            $orderStatus = $this->checkoutProcessor->getOrderStatus($referenceId);
-            if (!$orderStatus) {
-                wp_redirect($order->get_cancel_order_url());
-                exit;
-            }
-
-            // Process payment based on status
-            if (isset($orderStatus['status']) && $orderStatus['status'] === 'SUCCESS') {
-                // Payment successful
-                $order->update_status('processing');
-                $order->add_order_note(__('Payment successful via Tapsilat. Reference ID: ', 'tapsilat-woocommerce') . $referenceId);
-                $order->payment_complete($referenceId);
-                $woocommerce->cart->empty_cart();
-                wp_redirect($this->get_return_url($order));
-                exit;
-            } else {
-                // Payment failed
-                $order->update_status('failed');
-                $order->add_order_note(__('Payment failed via Tapsilat. Reference ID: ', 'tapsilat-woocommerce') . $referenceId);
-                wp_redirect($order->get_cancel_order_url());
-                exit;
-            }
         }
     }
 }
